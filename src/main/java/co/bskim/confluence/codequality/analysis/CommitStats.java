@@ -30,6 +30,15 @@ public final class CommitStats
     public int dupClones = -1;
     /** Lines the duplication ratio was measured over: this tree less any mirror subtree. */
     public int dupMeasuredLines = -1;
+    /**
+     * Normalised lines the parent tree held, which is the denominator of the bulk-import test.
+     *
+     * <p>Run-local and deliberately not cached: the import verdict is decided during replay
+     * and stored as {@link #importCommit}, so nothing later needs this. It is here so the
+     * decision can be audited - "added 4,124 lines to a tree of 0" is checkable, "this was an
+     * import" is not.</p>
+     */
+    public int parentLines = -1;
     public int errSwallow = -1;
     public int calls = -1;
     /** Legacy-metric inputs, sampled alongside the rest; -1 when not sampled. */

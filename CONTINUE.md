@@ -55,7 +55,7 @@ administrators see them.** Link a space to give a team access.
   commit whose cached row has no statics.
 - `STATIC_SAMPLE_TARGET` said 40 while the call site used 40x5; it is 200 and used directly.
 
-### A-3 — tests exist now (32, all green)
+### A-3 — tests exist now (38, all green)
 
 `CopyPasteClassifierTest` (6): scattered idioms are not copies (the case that made v1 report
 13.7%), a six-line block copied across files, a move within a file, a move across files, a copy
@@ -331,16 +331,62 @@ answered and a credential cannot change that. Measured against a black-hole addr
 once instead of per row - at forty repositories and a two-second poll that was twenty
 transactions a second repeating one table scan. Both shipped with the threshold work.
 
+### E-3 - measured, then narrowed
+
+Marked `[estimate]` by the review, and it was right. `tools/ImportProbe.java` ran the engine
+over **50,429 commits in 25 repositories with full history** - the cohort clones are shallow and
+useless for this. The old rule (over 200 lines added, and more than half of what the parent
+held) flagged 25 roots and 37 other commits. Reading all 37 showed two kinds of mistake.
+
+**File splits.** "Split up click into a package" moved 1,130 of its 1,165 added lines; loguru's
+`__init__.py` split, got's `index.js` split and one tqdm merge looked the same. The code was
+already in the repository - this is the refactoring the report exists to reward, and it was
+being excluded from the refactoring ratio. So: a commit whose added lines are mostly *moved* is
+a relocation, not an arrival. No genuine import in the sample had most of its lines moved.
+
+**Ordinary work on a small repository.** loguru's "Add rotating file handler" added 205 lines to
+a 208-line tree. Four early feature-branch merges in google/auto added 296-809 lines to trees of
+530-947. Half of a small tree is a normal week, so the ratio test needs a denominator worth
+dividing by - a thousand lines, the same floor below which a repository is too small to put in a
+threshold cohort at all.
+
+Two escape hatches keep the real cases: a tree with less than 200 lines has no codebase to
+compare against, so code arriving there is the initial body however small the repository looks
+(that keeps "moved cli over from the sandbox" and "Initial code drop"), and 2,000 lines in one
+commit is wholesale whatever it landed on. Between 1,000 and 2,000 the verdict on the sample
+does not move, so the exact figure is not carrying the decision.
+
+Net: 15 of the 37 reclassified, and each of the 22 that remain is a genuine wholesale event - an
+initial import, a rewrite, a vendored package, or a repository-wide mechanical pass. Six tests,
+half of them commits that must *not* be excluded and half that must, because a tightened rule is
+one that can now miss things. The two "must not" tests fail against the old rule on exactly
+their own assertions.
+
+Two things came out of it rather than out of the review.
+
+**The label was wrong.** A third of what the rule keeps is formatters, lint migrations and
+whitespace passes - "bulk imports excluded" was a checkably untrue statement about them. It
+reads "wholesale commits excluded" now, and the caveat lists what qualifies and says that moving
+code between files does not.
+
+**`MessageFormat` was eating apostrophes.** "somebody's work" reached the report as "somebodys
+work", because a single quote is `MessageFormat`'s own escape character. One string was
+affected; the class of fault will recur, so `tools/make-i18n.py` now refuses to generate when a
+finding or caveat with a `{n}` placeholder contains a lone apostrophe. Verified by planting the
+fault: exit 1, naming the key.
+
+`ALGO_VERSION` is at 4. `CommitStats.parentLines` carries the import test's denominator so the
+verdict can be audited - "added 4,124 lines to a tree of 0" is checkable, "this was an import"
+is not.
+
 ## Next, in order
 
-1. **E-3**: bulk-import detection may over-fire on a young repository. The last open item from
-   the first review.
-2. **A mirror one file wide.** `moment` shows the gap: a bundle that concatenates a whole
+1. **A mirror one file wide.** `moment` shows the gap: a bundle that concatenates a whole
    directory is not a subtree, so `MirrorTrees` cannot see it. Detecting "this file holds most
    of that directory" would close the last class of checked-in build output.
-3. The macro browser **icon** still reports `icon: None` despite the attribute resolving in the
+2. The macro browser **icon** still reports `icon: None` despite the attribute resolving in the
    descriptor JSON and the resource serving as `image/png`. Cosmetic, unresolved.
-4. The two registered repositories have **no spaces linked**, so only administrators see them.
+3. The two registered repositories have **no spaces linked**, so only administrators see them.
 
 ## Things worth knowing before touching the code
 

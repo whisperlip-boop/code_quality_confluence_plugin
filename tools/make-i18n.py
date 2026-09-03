@@ -9,6 +9,7 @@ Confluence(Java 8)는 플러그인 i18n .properties를 ISO-8859-1로 읽는다. 
 """
 
 import os
+import re
 
 # (key, english, korean)
 MESSAGES = [
@@ -355,7 +356,7 @@ MESSAGES = [
      "부르지 않고 자체 처리하는 쪽으로 기울고 있다는 신호다."),
 
     ("cq.unit.percent", "%", "%"),
-    ("cq.label.importExcluded", "bulk imports excluded", "일괄 반입 제외"),
+    ("cq.label.importExcluded", "wholesale commits excluded", "일괄 변경 커밋 제외"),
     ("cq.label.tableView", "Show the numbers", "숫자로 보기"),
     ("cq.label.clones", "{0} clone pairs", "클론 {0}쌍"),
     # The table is capped, so it names both numbers rather than repeating the total over a
@@ -532,13 +533,20 @@ MESSAGES = [
      "{0}개 커밋이 {1}일보다 최근이라 churn을 끝까지 측정할 수 없다. 해당 구간은 회색으로 "
      "표시하고 평균에서 제외했다. 여기서 0%는 \"좋다\"가 아니라 \"아직 모른다\"다. 이 처리를 "
      "빼면 최신 커밋이 항상 가장 건강해 보인다."),
-    ("cq.caveat.importExcluded.title", "Bulk imports excluded", "일괄 반입 커밋 제외"),
+    ("cq.caveat.importExcluded.title", "Wholesale commits excluded",
+     "일괄 변경 커밋 제외"),
     ("cq.caveat.importExcluded.body",
-     "{0} commit(s) totalling {1} lines were detected as bulk imports and left out of every "
-     "ratio. Including a single commit that lands a whole codebase makes every ratio "
-     "meaningless.",
-     "일괄 반입으로 판정된 커밋 {0}개, {1}줄을 모든 비율에서 제외했다. 코드베이스가 한 번에 "
-     "들어온 커밋을 포함하면 모든 비율이 무의미해진다."),
+     "{0} commit(s) totalling {1} lines arrived as a body of code rather than as authored "
+     "work, and are left out of every ratio: an initial import, a rewrite, a vendored "
+     "dependency, or a repository-wide mechanical pass such as a formatter. One commit that "
+     "lands a whole codebase would otherwise decide every ratio on the page. A commit that "
+     "merely moves code between files is not one of these - that is refactoring, and it is "
+     "counted.",
+     "커밋 {0}개, {1}줄은 누군가의 작업이 아니라 코드 덩어리로 들어온 것이라 모든 비율에서 "
+     "제외했다. 최초 반입, 재작성, 벤더링된 의존성, 또는 formatter처럼 레포지터리 전체를 "
+     "훑는 기계적 변경이 여기 해당한다. 코드베이스 전체를 넣는 커밋 하나가 이 페이지의 "
+     "모든 비율을 결정해버리기 때문이다. 파일 사이에서 코드를 옮기기만 한 커밋은 여기 "
+     "들어가지 않는다 — 그건 리팩터링이고, 집계에 포함된다."),
     ("cq.caveat.sampleSize.title", "Sample size", "표본 크기"),
     ("cq.caveat.sampleSize.body",
      "{0} commits over {1} days by {2} author(s). Read the direction, not the slope - and "
@@ -596,7 +604,32 @@ def escape(value):
     return "".join(out)
 
 
+def check_message_format():
+    """Refuses an apostrophe in a string that MessageFormat will parse.
+
+    Findings and caveats are worded server-side through java.text.MessageFormat, where a
+    single quote is the escape character: "somebody's work" comes out as "somebodys work",
+    silently, in the finished report. Only strings with a {n} placeholder go through the
+    formatter, so only those are checked - and the fix is to reword rather than to write '',
+    which every future translator would have to know about.
+    """
+    bad = []
+    for key, english, korean in MESSAGES:
+        if not (key.startswith("cq.finding.") or key.startswith("cq.caveat.")):
+            continue
+        for label, value in (("en", english), ("ko", korean)):
+            if not re.search(r"\{\d+\}", value):
+                continue
+            stripped = value.replace("''", "")
+            if "'" in stripped:
+                bad.append("%s (%s): %s" % (key, label, value[:70]))
+    if bad:
+        raise SystemExit("MessageFormat eats a lone apostrophe. Reword these:\n  "
+                         + "\n  ".join(bad))
+
+
 def main():
+    check_message_format()
     root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..",
                         "src", "main", "resources")
     emit(os.path.join(root, "code-quality.properties"), 1,

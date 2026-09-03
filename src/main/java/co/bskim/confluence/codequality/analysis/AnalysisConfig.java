@@ -7,7 +7,7 @@ public final class AnalysisConfig
      * Stored on every cached row. Trend lines are only comparable within one version, so a
      * bump forces every commit to be recomputed instead of silently mixing two algorithms.
      */
-    public static final int ALGO_VERSION = 3;
+    public static final int ALGO_VERSION = 4;
 
     /** Minimum matching run for a block to count as copied or moved. Three killed the noise. */
     public static final int RUN = 3;
@@ -26,9 +26,52 @@ public final class AnalysisConfig
      *  can still change their churn and their censoring flag. */
     public static final long INCREMENTAL_REPLAY_MS = 2 * CHURN_WINDOW_MS;
 
-    /** A commit adding more than this share of its parent's code is treated as a bulk import. */
+    /**
+     * When a commit is treated as a wholesale change rather than as somebody's work.
+     *
+     * <p>Such a commit is left out of every ratio the report shows, so getting this wrong is
+     * expensive in both directions: missing one lets a dump of pre-existing code stand in for
+     * the team's habits, and firing wrongly deletes real work from the denominator - which on a
+     * young repository is most of the evidence there is.</p>
+     *
+     * <p>Measured over 50,429 commits in 25 repositories with full history
+     * ({@code tools/ImportProbe.java}). The original rule - over 200 lines added and more than
+     * half of what the parent held - flagged 37 non-root commits, and reading all 37 showed two
+     * kinds of mistake:</p>
+     *
+     * <ul>
+     *   <li><b>File splits.</b> "Split up click into a package" moved 1,130 of its 1,165 added
+     *   lines; three more looked the same. The code already existed in the repository, so this
+     *   is the refactoring the report is meant to praise - and it was being excluded from the
+     *   refactoring ratio. Hence {@link #IMPORT_MOVED_SHARE}: a relocation is not an import,
+     *   and no genuine import in the sample had most of its lines moved.</li>
+     *   <li><b>Ordinary work on a small repository.</b> "Add rotating file handler" added 205
+     *   lines to a 208-line tree; four early feature-branch merges in google/auto added 296 to
+     *   809 lines to trees of 530 to 947. Half of a small tree is a normal week's work, so the
+     *   ratio test needs a denominator worth dividing by - {@link #IMPORT_MIN_PARENT_LINES},
+     *   the same thousand lines below which a repository is too small to characterise at
+     *   all.</li>
+     * </ul>
+     *
+     * <p>Two escape hatches keep the real cases. A tree holding less than
+     * {@code IMPORT_MIN_LINES} has no codebase to compare against, so code arriving there is
+     * the initial body however small the repository looks - that keeps "moved cli over from the
+     * sandbox" and "Initial code drop". And {@link #IMPORT_LARGE_LINES} catches a dump that is
+     * large outright, whatever it landed on; between 1,000 and 2,000 lines the verdict on the
+     * sample does not move, so the exact figure is not carrying the decision.</p>
+     *
+     * <p>Together these reclassify 15 of the 37, and every one of the 22 that remain is a
+     * genuine wholesale event: an initial import, a rewrite, a vendored package, or a
+     * repository-wide mechanical pass such as a formatter or a lint migration.</p>
+     */
     public static final double IMPORT_RATIO = 0.5;
     public static final int IMPORT_MIN_LINES = 200;
+    /** Above this share of added lines being moved, the commit rearranged rather than added. */
+    public static final double IMPORT_MOVED_SHARE = 0.5;
+    /** Below this, "more than half the parent" is not evidence of anything. */
+    public static final int IMPORT_MIN_PARENT_LINES = 1000;
+    /** A commit this large is wholesale whatever it landed on. */
+    public static final int IMPORT_LARGE_LINES = 2000;
 
     /**
      * Most sampled points in a static-metric series.

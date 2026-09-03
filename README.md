@@ -252,7 +252,7 @@ as ISO-8859-1, so Korean has to be `\uXXXX` escaped. Edit `tools/make-i18n.py`, 
 atlas-mvn test
 ```
 
-Thirty-two of them, and they exist because the numbers are the product. Six pin the copy-paste
+Thirty-eight of them, and they exist because the numbers are the product. Six pin the copy-paste
 classifier: scattered language idioms must not count as copying (the case that made the first
 version report 13.7%), a block copied across files, a move within a file, a move across files, a
 copy whose source survived, and **classification independent of the order files entered the
@@ -274,6 +274,10 @@ of them fail against the unfixed code; the other two guard the opposite mistake,
 clone that was still good.
 
 Six cover mirrored subtrees, four of them trees that must not be treated as one.
+
+Six decide when a commit counts as wholesale rather than as authored work - three of them
+commits that must be excluded and three that must not, since the rule was narrowed after
+measuring 50,429 commits and a narrowed rule is one that can now miss things.
 
 One pins that a mis-dated commit cannot silence churn for the rest of the history, and one that
 a token in the user position of an https URL is a credential rather than a login name - both

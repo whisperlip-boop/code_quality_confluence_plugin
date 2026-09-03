@@ -279,9 +279,8 @@ public final class AnalysisEngine
         row.copied = mix.copied;
         row.moved = mix.moved;
         row.deleted = mix.deleted;
-        row.importCommit = parent == null
-                || (row.added > AnalysisConfig.IMPORT_MIN_LINES
-                    && row.added > AnalysisConfig.IMPORT_RATIO * parentNormLines);
+        row.parentLines = parentNormLines;
+        row.importCommit = parent == null || wholesale(row, parentNormLines);
 
         churn.advanceTo(row.committedAt);
         for (FileChange change : changes)
@@ -389,6 +388,40 @@ public final class AnalysisEngine
             }
         });
         return changes;
+    }
+
+    /**
+     * Whether a commit brought in a body of code rather than being somebody's work.
+     *
+     * <p>Each branch answers something the measurements showed - see
+     * {@link AnalysisConfig#IMPORT_RATIO} for the sample and the counts.</p>
+     */
+    private static boolean wholesale(CommitStats row, int parentNormLines)
+    {
+        if (row.moved > AnalysisConfig.IMPORT_MOVED_SHARE * row.added)
+        {
+            // Rearranged, not added: the code was already in this repository and this commit
+            // deleted it from where it used to be. That is refactoring, and excluding it hid
+            // it from the one ratio built to reward it.
+            return false;
+        }
+        if (row.added <= AnalysisConfig.IMPORT_MIN_LINES)
+        {
+            return false;
+        }
+        if (parentNormLines < AnalysisConfig.IMPORT_MIN_LINES)
+        {
+            // Nothing to compare against, so this is the initial body however small it looks.
+            return true;
+        }
+        if (row.added <= AnalysisConfig.IMPORT_RATIO * parentNormLines)
+        {
+            return false;
+        }
+        // Doubling a tree only means something once the tree is worth dividing by; below that,
+        // a commit has to be wholesale on its own terms.
+        return parentNormLines >= AnalysisConfig.IMPORT_MIN_PARENT_LINES
+                || row.added >= AnalysisConfig.IMPORT_LARGE_LINES;
     }
 
     // ------------------------------------------------------------------ static metrics
