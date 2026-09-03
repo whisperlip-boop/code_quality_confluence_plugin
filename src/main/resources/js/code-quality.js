@@ -56,10 +56,30 @@
      * Deliberately not a substring match: `api` would answer for both `acme/api` and
      * `acme-fork/api`, and quietly showing two rows is not what "show only this one" asked for.
      */
+    /**
+     * Is this repository one of the selected ones?
+     *
+     * <p>The parameter holds a comma-separated list, because the macro's picker is a
+     * multi-select. An empty list selects nothing rather than everything: with a picker,
+     * "nothing ticked" plainly means nothing ticked, and the alternative made the preview show
+     * a full list before any choice had been made. The administration screen is the exception -
+     * see {@code data-context} - because listing everything is what that screen is for.</p>
+     */
+    function matchesSelection(repo, selection) {
+        var refs = String(selection === undefined || selection === null ? '' : selection)
+            .split(',');
+        for (var i = 0; i < refs.length; i++) {
+            if (identifies(repo, refs[i])) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     function identifies(repo, wanted) {
         var want = normaliseRef(wanted);
         if (want === '') {
-            return true;
+            return false;
         }
         if (String(repo.id) === want) {
             return true;
@@ -285,6 +305,8 @@
 
     function App(root) {
         this.root = root;
+        // 'admin' lists everything and manages it; 'macro' shows a chosen few, read-mostly.
+        this.context = root.getAttribute('data-context') === 'admin' ? 'admin' : 'macro';
         this.only = (root.getAttribute('data-only') || '').trim();
         this.heading = (root.getAttribute('data-title') || '').trim();
         this.repos = [];
@@ -311,7 +333,7 @@
             STRINGS = payload.strings || STRINGS;
             CAN_MANAGE = !!payload.canManage;
             self.repos = payload.repos || [];
-            if (self.only) {
+            if (self.context !== 'admin') {
                 // Kept so the empty case can say what it filtered and out of how many, which
                 // is the difference between "you asked for something that is not here" and
                 // "nothing is registered". Those used to look identical.
@@ -319,7 +341,7 @@
                     return repo.name;
                 });
                 self.repos = self.repos.filter(function (repo) {
-                    return identifies(repo, self.only);
+                    return matchesSelection(repo, self.only);
                 });
             }
             self.render();
@@ -363,7 +385,15 @@
                 text: this.heading || text('ui.repositories') })
         ];
 
-        if (this.repos.length === 0 && this.only) {
+        if (this.repos.length === 0 && this.context !== 'admin' && this.only === '') {
+            // Nothing picked. The macro browser disables Save while the parameter is empty, so
+            // this is a macro saved before the parameter became required, or storage edited by
+            // hand - either way the fix is to open the macro and choose.
+            children.push(el('p', {
+                'class': 'cq-empty',
+                text: IN_MACRO_PREVIEW ? text('ui.pickInDialog') : text('ui.noneSelected')
+            }));
+        } else if (this.repos.length === 0 && this.only) {
             // Registered-and-filtered-out is not the same as not-registered, and saying the
             // second when the first is true sends the reader off to add a repository that is
             // already there. The names are listed because otherwise there is nothing on screen
@@ -386,7 +416,7 @@
         }
 
         var bar = [];
-        if (CAN_MANAGE && !IN_MACRO_PREVIEW) {
+        if (CAN_MANAGE && this.context === 'admin') {
             bar.push(el('button', {
                 'class': 'cq-btn cq-btn-primary',
                 type: 'button',
@@ -448,6 +478,10 @@
             }));
         }
 
+        // On a page: analyse, report, delete. Registering and editing belong to the
+        // administration screen - a page is content, and having two places to configure the
+        // same thing is two places for the permissions to drift apart.
+        var onAdminScreen = this.context === 'admin';
         var actions = [];
         if (CAN_MANAGE) {
             actions.push(iconButton('analyze', text('ui.analyze'), function () {
@@ -459,7 +493,7 @@
             window.open(contextPath() + '/plugins/servlet/code-quality/report?repo='
                 + encodeURIComponent(repo.id), '_blank', 'noopener');
         }, { disabled: !repo.hasReport }));
-        if (CAN_MANAGE) {
+        if (CAN_MANAGE && onAdminScreen) {
             actions.push(iconButton('edit', text('ui.edit'), function () {
                 self.editing = {
                     id: repo.id, name: repo.name, url: repo.url, branch: repo.branch,
@@ -468,6 +502,8 @@
                 };
                 self.render();
             }));
+        }
+        if (CAN_MANAGE) {
             actions.push(iconButton('delete', text('ui.delete'), function () {
                 if (window.confirm(text('ui.confirmDelete', [repo.name]))) {
                     self.remove(repo);
@@ -479,11 +515,14 @@
         if (repo.branch) {
             nameCell.push(el('span', { 'class': 'cq-branch', text: repo.branch }));
         }
-        // Visibility is a property worth seeing at a glance, not buried in the edit form.
-        var spaces = (repo.spaceKeys || '').split(',').filter(function (k) {
-            return k !== '';
-        });
-        if (spaces.length === 0) {
+        // Visibility is a property worth seeing at a glance - on the screen where somebody
+        // can act on it. On a page it is just noise beside the repository's name.
+        var spaces = onAdminScreen
+            ? (repo.spaceKeys || '').split(',').filter(function (k) {
+                return k !== '';
+            })
+            : [];
+        if (spaces.length === 0 && onAdminScreen) {
             nameCell.push(el('span', {
                 'class': 'cq-scope cq-scope-private', text: text('ui.spacesAdminOnly')
             }));
@@ -874,6 +913,7 @@
     // copy of it - a copy is what drifts. Nothing on the page reads it.
     global.CqRepoMatch = {
         identifies: identifies,
+        matchesSelection: matchesSelection,
         normaliseRef: normaliseRef,
         ownerAndRepo: ownerAndRepo
     };

@@ -69,7 +69,8 @@ public class AdminServlet extends HttpServlet
         out.print(StaticAssets.escape(i18n.getText("cq.admin.title")));
         out.print("</h1><p class=\"cq-standalone-note\">");
         out.print(StaticAssets.escape(i18n.getText("cq.admin.note")));
-        out.print("</p><div class=\"cq-app\" data-only=\"\" data-title=\"\">");
+        out.print("</p><div class=\"cq-app\" data-context=\"admin\""
+                + " data-only=\"\" data-title=\"\">");
         out.print("<div class=\"cq-loading\">...</div></div><p class=\"cq-standalone-foot\">");
         out.print("<a href=\"");
         out.print(StaticAssets.escape(applicationProperties.getBaseUrl(

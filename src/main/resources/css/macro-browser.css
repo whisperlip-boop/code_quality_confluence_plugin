@@ -1,0 +1,50 @@
+/*
+ * The Repository picker in the macro browser. Deliberately plain: it sits inside Confluence's
+ * own dialog, so it borrows the dialog's type and spacing rather than bringing its own look.
+ */
+.cq-macro-picker {
+    max-height: 260px;
+    overflow-y: auto;
+    border: 1px solid #dfe1e6;
+    border-radius: 3px;
+    padding: 4px 0;
+}
+
+.cq-macro-picker-row {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-areas: "box name" "box url";
+    align-items: baseline;
+    column-gap: 8px;
+    padding: 6px 10px;
+    cursor: pointer;
+}
+
+.cq-macro-picker-row:hover {
+    background: #f4f5f7;
+}
+
+.cq-macro-picker-row input[type="checkbox"] {
+    grid-area: box;
+    align-self: center;
+    margin: 0;
+}
+
+.cq-macro-picker-name {
+    grid-area: name;
+    font-weight: 600;
+    word-break: break-all;
+}
+
+.cq-macro-picker-url {
+    grid-area: url;
+    color: #6b778c;
+    font-size: 11px;
+    word-break: break-all;
+}
+
+.cq-macro-picker-status {
+    margin: 0;
+    padding: 8px 10px;
+    color: #6b778c;
+}

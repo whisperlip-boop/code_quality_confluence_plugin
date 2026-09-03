@@ -95,12 +95,32 @@ public class RepoMatchTest
         assertDoesNotMatch("8", "another id");
     }
 
-    /** An empty parameter means "all of them", which is how the macro ships. */
+    /**
+     * An empty selection selects nothing.
+     *
+     * <p>It used to mean "all of them". With a picker in the dialog, nothing ticked plainly
+     * means nothing ticked - and the old reading made the preview show a full list before any
+     * choice had been made, which is what prompted the change. The administration screen keeps
+     * listing everything; that is decided by {@code data-context}, not here.</p>
+     */
     @Test
-    public void anEmptyParameterMatchesEverything() throws Exception
+    public void anEmptySelectionSelectsNothing() throws Exception
     {
-        assertMatches("", "an empty parameter");
-        assertMatches("   ", "whitespace only");
+        assertNotSelected("", "an empty selection");
+        assertNotSelected("   ", "whitespace only");
+        assertNotSelected(",,", "separators with nothing between them");
+    }
+
+    /** The parameter holds a list, because the dialog's picker takes several. */
+    @Test
+    public void aListSelectsEveryRepositoryInIt() throws Exception
+    {
+        assertSelected("captureV", "one entry");
+        assertSelected("dept_calendar,captureV", "second of two");
+        assertSelected("captureV,dept_calendar", "first of two");
+        assertSelected(" dept_calendar , captureV ", "padding around the separators");
+        assertSelected("11,7", "a list of ids");
+        assertNotSelected("dept_calendar,field_template_jira_server", "a list without it");
     }
 
     /**
@@ -145,10 +165,29 @@ public class RepoMatchTest
                 identifies(typed));
     }
 
+    private void assertSelected(String parameter, String what) throws ScriptException
+    {
+        assertTrue(what + " (" + parameter + ") must select the repository",
+                selected(parameter));
+    }
+
+    private void assertNotSelected(String parameter, String what) throws ScriptException
+    {
+        assertFalse(what + " (" + parameter + ") must not select the repository",
+                selected(parameter));
+    }
+
     private boolean identifies(String typed) throws ScriptException
     {
         engine.put("typed", typed);
         return Boolean.TRUE.equals(engine.eval("window.CqRepoMatch.identifies(repo, typed)"));
+    }
+
+    private boolean selected(String parameter) throws ScriptException
+    {
+        engine.put("parameter", parameter);
+        return Boolean.TRUE.equals(
+                engine.eval("window.CqRepoMatch.matchesSelection(repo, parameter)"));
     }
 
     private static String source(String path) throws Exception

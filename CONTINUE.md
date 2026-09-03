@@ -55,7 +55,7 @@ administrators see them.** Link a space to give a team access.
   commit whose cached row has no statics.
 - `STATIC_SAMPLE_TARGET` said 40 while the call site used 40x5; it is 200 and used directly.
 
-### A-3 — tests exist now (43, all green)
+### A-3 — tests exist now (50, all green)
 
 `CopyPasteClassifierTest` (6): scattered idioms are not copies (the case that made v1 report
 13.7%), a six-line block copied across files, a move within a file, a move across files, a copy
@@ -436,6 +436,55 @@ One incident worth keeping: the render check failed with *"No argument list for 
 bundleFile"* because the jar was stale - `atlas-mvn test` compiles but does not repackage. That
 is the guard added earlier in the day doing its job, and it is the reason it exists: without it
 the page would have rendered `{0}` and looked fine at a glance.
+
+### The macro: what it is for, and what it is not
+
+Three rounds of feedback on the same screen, and they converge on one thing: the macro had
+become a second administration console that happened to live on a page.
+
+**The Repository parameter is a checkbox list now.** A free-text field could not say what it
+wanted, because the stored names come in two shapes - entered by hand, from when the
+registration form had a Name field, and `owner/repo` derived from the URL ever since - so one
+table showed `captureV` beside `whisperlip-boop/dept_calendar` with nothing to say which form
+the parameter took, and pasting the clone URL matched nothing at all. Choosing from the list
+removes the question instead of answering it.
+
+It hangs off `setMacroJsOverride`, the same hook Confluence's own inline-tasks macro uses, and
+is installed through `module-exporter`'s `safeRequire`: if a future Confluence changes those
+internals, or the REST call does not answer, the override is not installed and the plain text
+field remains. That field still works, because the parameter accepts a name, an `owner/repo`,
+an id or a clone URL - so the generous matcher is the fallback rather than dead weight. A macro
+saved before the picker existed opens with the right boxes ticked (an id or URL is resolved
+through the matcher) and its value is normalised to names on the way out.
+
+**Nothing selected now shows nothing**, and the parameter is declared `required`, so
+Confluence's own `processRequiredParameters` disables Save and the preview refresh until
+something is ticked - which was the reporter's suggestion and is better than any message. The
+empty case can therefore only arrive from a macro saved before this or from hand-edited
+storage, and it says "No repository selected. Edit this macro and choose one or more."
+
+**The three surfaces do different things**, decided by `data-context` on the mount point:
+
+| | administration screen | macro on a page | preview |
+|---|---|---|---|
+| list and status | yes | yes | name and URL only |
+| report | yes | yes | no |
+| analyse | yes | yes, administrators | no |
+| delete | yes | yes, administrators | no |
+| register, edit | yes | **no** | no |
+| space tags | yes | **no** | no |
+| nothing selected | lists everything | says to pick some | blank |
+
+Registering and editing on a page were in the original brief, and they were removed on request:
+two places to configure one thing is two places for the permissions to drift. Analyse and
+delete stay on the page deliberately - a stale report is worth refreshing where you are reading
+it, and delete keeps its confirmation naming what goes with it. Space tags moved to the
+administration screen, which is where somebody can act on visibility.
+
+`RepoMatchTest` grew to seven cases and runs the shipping file through Nashorn. The picker
+itself is checked by a harness under `/mnt/c/Users/vuno/cq-shot` that stubs the three Confluence
+pieces it touches - what a stub cannot prove is that Confluence honours the override, and only
+opening the dialog shows that.
 
 ## Next, in order
 

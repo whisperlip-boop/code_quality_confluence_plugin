@@ -20,6 +20,15 @@
         <context>code-quality</context>
     </web-resource>
 
+    <!-- Replaces the Repository text field with a checkbox list. Loaded into the macro
+         browser only; the page bundle above knows nothing about it. -->
+    <web-resource key="code-quality-macro-browser" name="Code Quality Macro Browser">
+        <dependency>com.atlassian.auiplugin:ajs</dependency>
+        <resource type="download" name="macro-browser.js" location="/js/macro-browser.js"/>
+        <resource type="download" name="macro-browser.css" location="/css/macro-browser.css"/>
+        <context>macro-browser</context>
+    </web-resource>
+
     <!-- The macro browser resolves its icon through a web-resource, so the icon lives in one
          of its own rather than riding on the context-loaded bundle. -->
     <web-resource key="code-quality-macro-icon" name="Code Quality Macro Icon">
@@ -70,7 +79,10 @@
         <description key="cq.macro.description"/>
         <category name="development"/>
         <parameters>
-            <parameter name="repository" type="string"/>
+            <!-- Required so the macro browser disables Save until something is chosen: an
+                 empty selection shows nothing, and a macro that shows nothing is not worth
+                 saving. Confluence's own processRequiredParameters does the disabling. -->
+            <parameter name="repository" type="string" required="true"/>
             <parameter name="title" type="string"/>
         </parameters>
     </xhtml-macro>

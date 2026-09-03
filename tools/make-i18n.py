@@ -26,8 +26,10 @@ MESSAGES = [
     ("co.bskim.confluence.code-quality.code-quality.param.repository.label",
      "Repository", "레포지터리"),
     ("co.bskim.confluence.code-quality.code-quality.param.repository.desc",
-     "Pick one, or type its name, owner/repo, or clone URL. Empty shows all of them.",
-     "하나를 고르거나, 이름·owner/repo·클론 URL 중 아무거나 입력. 비우면 전체."),
+     "Choose the repositories this macro shows. Nothing chosen shows nothing, so the dialog "
+     "will not save until you pick at least one.",
+     "이 매크로가 표시할 레포지터리를 고른다. 아무것도 고르지 않으면 아무것도 표시되지 "
+     "않으므로, 하나 이상 고를 때까지 저장되지 않는다."),
     ("co.bskim.confluence.code-quality.code-quality.param.title.label",
      "Heading", "제목"),
     ("co.bskim.confluence.code-quality.code-quality.param.title.desc",
@@ -81,13 +83,21 @@ MESSAGES = [
     # Registered-but-filtered-out and nothing-registered used to render identically, so a
     # macro whose repository parameter matched nothing announced that no repository existed -
     # with three of them in the table one click away.
+    # Nothing picked. The macro browser refuses to save an empty selection, so on a page this
+    # can only be a macro from before the parameter became required, or hand-edited storage.
+    ("cq.ui.noneSelected",
+     "No repository selected. Edit this macro and choose one or more.",
+     "선택된 레포지터리가 없다. 이 매크로를 편집해 하나 이상 고를 것."),
+    ("cq.ui.pickInDialog",
+     "Choose one or more repositories on the left.",
+     "왼쪽에서 레포지터리를 하나 이상 고를 것."),
     # Shown only inside the macro browser preview, where the buttons are deliberately absent:
     # the preview runs against the live session, so a Delete there would really delete.
     ("cq.ui.previewNote",
-     "Preview of which repositories this macro will show. The analyse, report, edit and delete "
-     "actions appear on the saved page.",
-     "이 매크로가 어떤 레포지터리를 표시할지 미리 보는 화면이다. 분석·리포트·편집·삭제는 "
-     "저장된 페이지에서 나타난다."),
+     "Preview of which repositories this macro will show. Analyse, report and delete appear on "
+     "the saved page; registering and editing live on the administration screen.",
+     "이 매크로가 어떤 레포지터리를 표시할지 미리 보는 화면이다. 분석·리포트·삭제는 저장된 "
+     "페이지에서 나타나고, 신규 등록과 편집은 관리 화면에 있다."),
     ("cq.ui.filterNoMatch",
      "No repository matches \u201c{0}\u201d. {1} registered.",
      "\u201c{0}\u201d와(과) 일치하는 레포지터리가 없다. 등록된 것은 {1}개다."),

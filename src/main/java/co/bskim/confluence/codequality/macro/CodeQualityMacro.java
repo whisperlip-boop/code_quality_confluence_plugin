@@ -35,7 +35,10 @@ public class CodeQualityMacro implements Macro
 
         String only = parameters.get("repository");
         String title = parameters.get("title");
-        return "<div class=\"cq-app\""
+        // data-context tells the script which surface it is on. On a page an empty selection
+        // means nothing was picked and nothing should be shown; on the administration screen
+        // it means the whole list, which is the point of that screen.
+        return "<div class=\"cq-app\" data-context=\"macro\""
                 + " data-only=\"" + escape(only) + "\""
                 + " data-title=\"" + escape(title) + "\">"
                 + "<div class=\"cq-loading\">Loading repositories...</div>"
