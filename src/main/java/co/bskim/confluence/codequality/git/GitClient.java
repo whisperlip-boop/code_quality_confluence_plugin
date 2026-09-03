@@ -18,6 +18,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.Locale;
+import java.util.Set;
 
 /**
  * Bare mirrors of the registered remotes, kept under the Confluence home directory.
@@ -32,7 +33,47 @@ public class GitClient
     private static final Logger log = LoggerFactory.getLogger(GitClient.class);
 
     private static final int TIMEOUT_SECONDS = 180;
-    private static final int LS_REMOTE_TIMEOUT_SECONDS = 30;
+    /**
+     * Probes run on a Confluence request thread, so this is a user-interface budget rather than
+     * a network one. It used to be 30 seconds and the probe made two attempts, so a host that
+     * accepted the connection and never answered held a request thread for a minute - on an
+     * instance with a small HTTP pool, a handful of those is an outage. Fifteen seconds is long
+     * enough for an internal GitLab that is merely slow.
+     */
+    private static final int LS_REMOTE_TIMEOUT_SECONDS = 15;
+
+    /**
+     * Free space a clone will not start without.
+     *
+     * <p>The clones live under the Confluence home, so a repository big enough to fill the
+     * filesystem does not spoil a report - it stops the instance from writing attachments,
+     * indexes and logs. Refusing to start is the cheap half of the guard, and the only half
+     * that runs before the disk is consumed.</p>
+     */
+    private static final long MIN_FREE_BYTES = 2L * 1024 * 1024 * 1024;
+
+    /**
+     * Size a single clone may not exceed.
+     *
+     * <p>Checked after the fetch, because git offers no way to ask a remote how big it is.
+     * That makes this the second line rather than the first: it stops the <em>next</em> run
+     * from paying for a repository that should never have been registered, and it says so
+     * instead of quietly working for four minutes and reporting numbers nobody can read. For
+     * scale, the largest repository in the reference cohorts is around 200MB of clone; 4GB is
+     * a monorepo, and a monorepo on a Confluence node is a disk incident.</p>
+     */
+    private static final long MAX_CLONE_BYTES = 4L * 1024 * 1024 * 1024;
+
+    /** Raised instead of filling the Confluence home or working on something unbounded. */
+    public static final class StorageLimitException extends IOException
+    {
+        private static final long serialVersionUID = 1L;
+
+        StorageLimitException(String message)
+        {
+            super(message);
+        }
+    }
 
     private final ApplicationProperties applicationProperties;
 
@@ -77,6 +118,13 @@ public class GitClient
             throws IOException, GitAPIException
     {
         File dir = repoDir(repoId);
+        long usable = storageRoot().getUsableSpace();
+        if (usable > 0 && usable < MIN_FREE_BYTES)
+        {
+            throw new StorageLimitException("Only " + megabytes(usable)
+                    + "MB free where clones are kept; " + megabytes(MIN_FREE_BYTES)
+                    + "MB is required before starting. Free space or move the Confluence home.");
+        }
         if (new File(dir, "config").isFile() && !clonedFrom(dir, url))
         {
             log.info("Repository {} points at a different remote than its clone; re-cloning",
@@ -94,6 +142,9 @@ public class GitClient
                     .setTimeout(TIMEOUT_SECONDS)
                     .setCredentialsProvider(credentials(auth))
                     .call();
+            // The clone path is the one that consumes the disk in the first place, so it is
+            // checked too - not only the fetch that comes after it.
+            checkSize(cloned.getRepository(), dir);
             return cloned.getRepository();
         }
 
@@ -115,7 +166,46 @@ public class GitClient
             repository.close();
             throw e;
         }
+        checkSize(repository, dir);
         return repository;
+    }
+
+    /** Fails the run rather than letting one repository own the node's disk. */
+    private void checkSize(Repository repository, File dir) throws IOException
+    {
+        long size = sizeOf(dir);
+        if (size <= MAX_CLONE_BYTES)
+        {
+            return;
+        }
+        repository.close();
+        throw new StorageLimitException("The clone is " + megabytes(size) + "MB, over the "
+                + megabytes(MAX_CLONE_BYTES) + "MB limit for one repository. Analyse a smaller "
+                + "repository, or raise the limit if this node has the disk for it.");
+    }
+
+    private static long sizeOf(File file)
+    {
+        if (file.isFile())
+        {
+            return file.length();
+        }
+        File[] children = file.listFiles();
+        if (children == null)
+        {
+            return 0;
+        }
+        long total = 0;
+        for (File child : children)
+        {
+            total += sizeOf(child);
+        }
+        return total;
+    }
+
+    private static long megabytes(long bytes)
+    {
+        return bytes / (1024 * 1024);
     }
 
     /**
@@ -213,6 +303,13 @@ public class GitClient
             result.error = anonymousError;
             return result;
         }
+        if ("timeout".equals(anonymousError) || "unreachable".equals(anonymousError))
+        {
+            // Nothing answered, so there is nothing for a credential to change. Trying again
+            // only doubles what the request thread is holding, which is the whole cost here.
+            result.error = anonymousError;
+            return result;
+        }
 
         try
         {
@@ -281,6 +378,69 @@ public class GitClient
         deleteRecursively(repoDir(repoId));
     }
 
+    /**
+     * Deletes clone directories that no registered repository owns.
+     *
+     * <p>Deleting a repository mid-analysis used to leave its clone behind for good: the
+     * request removes the row and calls {@link #discard}, then the analysis thread - which is
+     * inside {@code sync} and does not check for cancellation there - finishes cloning into the
+     * directory that was just removed. Several gigabytes, owned by nobody, and nothing ever
+     * looked at it again.</p>
+     *
+     * <p>A sweep rather than tighter coordination on the delete path, because the same
+     * directories are left behind by a node that is killed during a clone, and no amount of
+     * care in {@code delete} covers that.</p>
+     *
+     * @return how many directories were removed
+     */
+    public int discardOrphans(Set<Integer> liveRepoIds)
+    {
+        File[] entries = storageRoot().listFiles();
+        if (entries == null)
+        {
+            return 0;
+        }
+        int removed = 0;
+        for (File entry : entries)
+        {
+            String name = entry.getName();
+            if (!name.endsWith(".git"))
+            {
+                continue;
+            }
+            Integer id = parseId(name.substring(0, name.length() - 4));
+            if (id == null || liveRepoIds.contains(id))
+            {
+                continue;
+            }
+            log.info("Removing the clone of repository {}, which no longer exists: {}",
+                    id, entry);
+            if (deleteRecursively(entry))
+            {
+                removed++;
+            }
+            else
+            {
+                log.warn("Could not remove the orphaned clone at {} - check its ownership and "
+                        + "remove it by hand", entry);
+            }
+        }
+        return removed;
+    }
+
+    private static Integer parseId(String text)
+    {
+        try
+        {
+            return Integer.valueOf(text);
+        }
+        catch (NumberFormatException e)
+        {
+            // Not one of ours; leaving it alone is the safe reading of an unexpected name.
+            return null;
+        }
+    }
+
     private CredentialsProvider credentials(RepoAuth auth)
     {
         if (auth == null || auth.isEmpty())
@@ -293,23 +453,34 @@ public class GitClient
         return new UsernamePasswordCredentialsProvider(user, auth.token);
     }
 
-    private static void deleteRecursively(File file)
+    /**
+     * @return true when nothing is left behind
+     *
+     * <p>The return value exists because the orphan sweep counted directories it had failed to
+     * remove. A clone owned by another user - which is what a hand-made directory or a
+     * container running as a different uid looks like - cannot be deleted, and reporting it as
+     * cleaned up means nobody ever finds out it is still there.</p>
+     */
+    private static boolean deleteRecursively(File file)
     {
         if (!file.exists())
         {
-            return;
+            return true;
         }
+        boolean clean = true;
         File[] children = file.listFiles();
         if (children != null)
         {
             for (File child : children)
             {
-                deleteRecursively(child);
+                clean &= deleteRecursively(child);
             }
         }
-        if (!file.delete())
+        if (file.delete())
         {
-            file.deleteOnExit();
+            return clean;
         }
+        file.deleteOnExit();
+        return false;
     }
 }

@@ -512,6 +512,18 @@ MESSAGES = [
      "그대로 재면 비율이 코드가 아니라 디렉터리 구조에 대한 진술이 된다. 비율은 남은 "
      "{3}줄 기준이고, 양쪽에 같이 추가한 라인은 복사·붙여넣기 비율에 그대로 남는다 — "
      "두 번 한 일이기 때문이다."),
+    ("cq.caveat.historyTruncated.title",
+     "Only the newest {0} commits were analysed",
+     "최근 커밋 {0}개만 분석했다"),
+    ("cq.caveat.historyTruncated.body",
+     "This history is longer than one run will walk, so every figure above - the span, the "
+     "commit count, the authors, the trend - describes that window and not the whole "
+     "repository. The limit bounds the walk, the memory one run holds and the rows one "
+     "transaction writes; the numbers inside the window are computed the same way as always.",
+     "이 히스토리는 한 번의 분석이 훑는 길이보다 길다. 따라서 위의 모든 수치 — 기간, 커밋 "
+     "수, 작성자, 추세 — 는 레포지터리 전체가 아니라 그 구간에 대한 것이다. 이 상한은 "
+     "탐색 범위와 한 번의 실행이 점유하는 메모리, 한 트랜잭션이 쓰는 행 수를 묶는다. "
+     "구간 안의 수치 계산 방식은 평소와 같다."),
     ("cq.caveat.rightCensoring.title", "Right-censoring", "오른쪽 절단(right-censoring)"),
     ("cq.caveat.rightCensoring.body",
      "{0} commit(s) are newer than {1} days, so their churn cannot be measured to the end. "

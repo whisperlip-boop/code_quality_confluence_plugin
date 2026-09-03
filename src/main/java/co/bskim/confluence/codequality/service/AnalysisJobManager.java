@@ -124,6 +124,7 @@ public class AnalysisJobManager implements DisposableBean
             finally
             {
                 Thread.currentThread().setContextClassLoader(original);
+                sweepOrphanClones();
             }
         });
         return true;
@@ -193,6 +194,30 @@ public class AnalysisJobManager implements DisposableBean
         finally
         {
             git.close();
+        }
+    }
+
+    /**
+     * Removes clone directories no repository owns, after every run.
+     *
+     * <p>Here rather than on the delete path because this is also where a clone interrupted by
+     * a node restart gets cleaned up, and because a delete that races an in-flight clone can
+     * only be tidied after that clone finishes. Failure is logged and swallowed: a run that
+     * succeeded must not be reported as failed because housekeeping did not.</p>
+     */
+    private void sweepOrphanClones()
+    {
+        try
+        {
+            int removed = gitClient.discardOrphans(repositories.allIds());
+            if (removed > 0)
+            {
+                log.info("Removed {} orphaned clone directory/ies", removed);
+            }
+        }
+        catch (RuntimeException e)
+        {
+            log.warn("Could not sweep orphaned clone directories", e);
         }
     }
 

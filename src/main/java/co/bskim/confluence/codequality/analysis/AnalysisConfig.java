@@ -38,7 +38,18 @@ public final class AnalysisConfig
      */
     public static final int STATIC_SAMPLE_TARGET = 200;
 
-    /** Safety rails so one huge repository cannot take the instance down. */
+    /**
+     * Longest first-parent history one run will walk.
+     *
+     * <p>A real rail: it bounds the walk, the cached rows held in heap, and the row count one
+     * transaction writes. At roughly 400 bytes a commit this is about 8MB, which is why the
+     * per-commit cache needs no separate ceiling.</p>
+     *
+     * <p>Hitting it <b>truncates</b> - the newest {@code MAX_COMMITS} commits are analysed and
+     * the rest are not - and that has to reach the reader. It used to happen in silence, so a
+     * repository with a longer history reported a span and a commit count that were the rail's
+     * rather than its own, with nothing to say so. See the {@code historyTruncated} caveat.</p>
+     */
     public static final int MAX_COMMITS = 20000;
     public static final int MAX_FILE_BYTES = 2 * 1024 * 1024;
 

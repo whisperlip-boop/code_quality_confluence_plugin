@@ -73,6 +73,11 @@ public final class AnalysisEngine
         public int headDupClones;
         /** Lines the duplication ratio was measured over: HEAD less any mirror subtree. */
         public int headDupMeasuredLines;
+        /**
+         * True when the history is longer than {@link AnalysisConfig#MAX_COMMITS}, so every
+         * fact on the report describes the newest slice of it rather than the whole.
+         */
+        public boolean historyTruncated;
         /** Subtrees left out of the duplication measurement as copies of other subtrees. */
         public List<MirrorTrees.Mirror> headMirrors = new ArrayList<MirrorTrees.Mirror>();
         public int headBare;
@@ -150,7 +155,7 @@ public final class AnalysisEngine
         RevWalk walk = new RevWalk(repository);
         try
         {
-            List<RevCommit> chain = firstParentChain(walk, headId);
+            List<RevCommit> chain = firstParentChain(walk, headId, outcome);
             if (chain.isEmpty())
             {
                 throw new IOException("Repository has no commits");
@@ -494,7 +499,15 @@ public final class AnalysisEngine
         }
     }
 
-    private List<RevCommit> firstParentChain(RevWalk walk, ObjectId headId) throws IOException
+    /**
+     * The newest {@link AnalysisConfig#MAX_COMMITS} commits of the first-parent history.
+     *
+     * <p>Sets {@link Outcome#historyTruncated} when the rail was reached, because every fact
+     * on the report - the span, the commit count, the author list - is then about the window
+     * rather than the repository, and a reader has no way to tell.</p>
+     */
+    private List<RevCommit> firstParentChain(RevWalk walk, ObjectId headId, Outcome outcome)
+            throws IOException
     {
         List<RevCommit> chain = new ArrayList<RevCommit>();
         RevCommit current = walk.parseCommit(headId);
@@ -504,6 +517,7 @@ public final class AnalysisEngine
             current = current.getParentCount() > 0
                     ? walk.parseCommit(current.getParent(0)) : null;
         }
+        outcome.historyTruncated = current != null;
         Collections.reverse(chain);
         return chain;
     }

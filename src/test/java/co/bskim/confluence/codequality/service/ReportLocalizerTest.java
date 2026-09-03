@@ -32,8 +32,8 @@ public class ReportLocalizerTest
             "busFactor", "busFactorClean", "churnSpike", "identitySuspects", "copyPasteHigh");
 
     private static final List<String> CAVEAT_CODES = Arrays.asList(
-            "mirrorTrees", "rightCensoring", "importExcluded", "sampleSize", "approximation",
-            "aiAttribution", "firstParent");
+            "mirrorTrees", "historyTruncated", "rightCensoring", "importExcluded", "sampleSize",
+            "approximation", "aiAttribution", "firstParent");
 
     private static final Pattern PLACEHOLDER = Pattern.compile("\\{\\d+\\}");
 

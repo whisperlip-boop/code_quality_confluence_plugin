@@ -15,6 +15,8 @@ import com.atlassian.activeobjects.external.ActiveObjects;
 import com.atlassian.plugin.spring.scanner.annotation.imports.ComponentImport;
 import com.atlassian.sal.api.transaction.TransactionTemplate;
 import net.java.ao.Query;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
 import javax.inject.Named;
@@ -40,6 +42,8 @@ import java.util.Set;
 @Named
 public class RepositoryService
 {
+    private static final Logger log = LoggerFactory.getLogger(RepositoryService.class);
+
     public static final String STATUS_NEW = "NEW";
     public static final String STATUS_QUEUED = "QUEUED";
     public static final String STATUS_RUNNING = "RUNNING";
@@ -79,6 +83,20 @@ public class RepositoryService
                 }
             });
             return repos;
+        });
+    }
+
+    /** Every registered repository's id, for the clone-directory sweep. */
+    public Set<Integer> allIds()
+    {
+        return transactions.execute(() ->
+        {
+            Set<Integer> ids = new HashSet<Integer>();
+            for (CqRepo row : ao.find(CqRepo.class))
+            {
+                ids.add(row.getID());
+            }
+            return ids;
         });
     }
 
@@ -309,6 +327,16 @@ public class RepositoryService
     {
         transactions.execute(() ->
         {
+            if (ao.get(CqRepo.class, repoId) == null)
+            {
+                // Deleted while the analysis was running. Writing the rows anyway left
+                // CqCommit, CqClone and CqRun rows belonging to a repository that is gone -
+                // invisible in the UI, and counted by anything that scans those tables.
+                log.info("Repository {} was deleted during its analysis; discarding the result",
+                        repoId);
+                return null;
+            }
+
             Set<String> current = new HashSet<String>();
             for (CommitStats row : outcome.commits)
             {

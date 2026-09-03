@@ -1019,6 +1019,15 @@ public final class ReportBuilder
             caveats.add(caveat("mirrorTrees", mirrors));
         }
 
+        if (outcome.historyTruncated)
+        {
+            // Also first: it says the facts row describes a window, not the repository.
+            Map<String, Object> truncated = new LinkedHashMap<String, Object>();
+            truncated.put("commits", AnalysisConfig.MAX_COMMITS);
+            truncated.put("oldest", all.isEmpty() ? 0 : all.get(0).committedAt);
+            caveats.add(caveat("historyTruncated", truncated));
+        }
+
         Map<String, Object> censoring = new LinkedHashMap<String, Object>();
         censoring.put("commits", a.censoredCommits);
         censoring.put("days", 14);

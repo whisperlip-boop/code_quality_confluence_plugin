@@ -214,6 +214,8 @@ public final class ReportLocalizer
                         num(p, "trees", language), num(p, "lines", language),
                         str(p, "names"), num(p, "measured", language)
                 };
+            case "historyTruncated":
+                return new Object[] { num(p, "commits", language) };
             case "rightCensoring":
                 return new Object[] { num(p, "commits", language), num(p, "days", language) };
             case "importExcluded":
