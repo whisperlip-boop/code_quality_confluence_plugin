@@ -1,0 +1,468 @@
+/*
+ * Repository table. Deliberately free of AUI class names: the same stylesheet renders inside
+ * a Confluence page (via the web-resource) and on the standalone admin page (inlined by the
+ * servlet), and only one of those has AUI loaded.
+ */
+
+.cq-app {
+    --cq-ink: #172b4d;
+    --cq-ink-2: #5e6c84;
+    --cq-muted: #7a869a;
+    --cq-line: #dfe1e6;
+    --cq-line-strong: #c1c7d0;
+    --cq-surface: #ffffff;
+    --cq-surface-2: #f4f5f7;
+    --cq-primary: #0052cc;
+    --cq-primary-ink: #ffffff;
+    --cq-good: #216e4e;
+    --cq-good-bg: #e3fcef;
+    --cq-warn: #974f0c;
+    --cq-warn-bg: #fff7d6;
+    --cq-crit: #ae2a19;
+    --cq-crit-bg: #ffedeb;
+    --cq-neutral-bg: #ebecf0;
+
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--cq-ink);
+}
+
+.cq-app *,
+.cq-app *::before,
+.cq-app *::after {
+    box-sizing: border-box;
+}
+
+.cq-loading,
+.cq-app-error {
+    padding: 16px 0;
+    color: var(--cq-muted);
+}
+
+.cq-app-error {
+    color: var(--cq-crit);
+}
+
+.cq-panel-title {
+    margin: 0 0 12px;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--cq-ink);
+}
+
+/* Fixed columns so a long clone URL cannot push every row to two lines - the URL truncates
+   with an ellipsis instead and carries the full value in its title. */
+.cq-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+.cq-table col.cq-col-name {
+    width: 22%;
+}
+
+.cq-table col.cq-col-url {
+    width: 36%;
+}
+
+.cq-table col.cq-col-sync {
+    width: 13%;
+}
+
+.cq-table col.cq-col-status {
+    width: 17%;
+}
+
+.cq-table col.cq-col-actions {
+    width: 12%;
+}
+
+.cq-table th {
+    text-align: left;
+    font-weight: 600;
+    font-size: 12px;
+    letter-spacing: 0.02em;
+    text-transform: none;
+    color: var(--cq-ink-2);
+    padding: 8px 12px 8px 0;
+    border-bottom: 2px solid var(--cq-line);
+    white-space: nowrap;
+}
+
+.cq-table td {
+    padding: 12px 12px 12px 0;
+    border-bottom: 1px solid var(--cq-line);
+    vertical-align: middle;
+}
+
+.cq-table tr:last-child td {
+    border-bottom: 1px solid var(--cq-line);
+}
+
+.cq-name {
+    font-weight: 500;
+    word-break: break-word;
+}
+
+.cq-url {
+    color: var(--cq-ink-2);
+    font-size: 13px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.cq-url a {
+    color: var(--cq-primary);
+    text-decoration: none;
+}
+
+.cq-url a:hover {
+    text-decoration: underline;
+}
+
+.cq-branch {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 0 6px;
+    border-radius: 3px;
+    background: var(--cq-neutral-bg);
+    color: var(--cq-ink-2);
+    font-size: 11px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.cq-sync {
+    color: var(--cq-ink-2);
+    white-space: nowrap;
+}
+
+.cq-badge {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 10px;
+    font-size: 11.5px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.cq-badge-NEW {
+    background: var(--cq-neutral-bg);
+    color: var(--cq-ink-2);
+}
+
+.cq-badge-QUEUED,
+.cq-badge-RUNNING {
+    background: #deebff;
+    color: #0747a6;
+}
+
+.cq-badge-OK {
+    background: var(--cq-good-bg);
+    color: var(--cq-good);
+}
+
+.cq-badge-FAILED {
+    background: var(--cq-crit-bg);
+    color: var(--cq-crit);
+}
+
+.cq-progress {
+    display: block;
+    margin-top: 4px;
+    font-size: 11.5px;
+    color: var(--cq-muted);
+}
+
+/* Clamped to two lines: a JGit auth failure quotes the whole URL and would otherwise make
+   one bad row twice as tall as the rest. The full text stays in the title. */
+.cq-fail-message {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    margin-top: 4px;
+    font-size: 11.5px;
+    line-height: 1.35;
+    color: var(--cq-crit);
+    overflow-wrap: anywhere;
+}
+
+.cq-row-actions {
+    display: flex;
+    gap: 4px;
+    justify-content: flex-end;
+    white-space: nowrap;
+}
+
+.cq-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: 3px;
+    background: transparent;
+    color: var(--cq-ink-2);
+    cursor: pointer;
+}
+
+.cq-icon-btn:hover:not([disabled]) {
+    background: var(--cq-surface-2);
+    color: var(--cq-primary);
+}
+
+.cq-icon-btn:focus-visible {
+    outline: 2px solid var(--cq-primary);
+    outline-offset: 1px;
+}
+
+.cq-icon-btn[disabled] {
+    opacity: 0.35;
+    cursor: default;
+}
+
+.cq-icon-btn svg {
+    width: 16px;
+    height: 16px;
+    display: block;
+}
+
+.cq-icon-btn.cq-danger:hover:not([disabled]) {
+    color: var(--cq-crit);
+}
+
+.cq-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 16px;
+}
+
+.cq-btn {
+    font: inherit;
+    padding: 6px 14px;
+    border-radius: 3px;
+    border: 1px solid var(--cq-line-strong);
+    background: var(--cq-surface);
+    color: var(--cq-ink);
+    cursor: pointer;
+}
+
+.cq-btn:hover {
+    background: var(--cq-surface-2);
+}
+
+.cq-btn-primary {
+    background: var(--cq-primary);
+    border-color: var(--cq-primary);
+    color: var(--cq-primary-ink);
+    font-weight: 500;
+}
+
+.cq-btn-primary:hover {
+    background: #0747a6;
+}
+
+.cq-btn-link {
+    border: 0;
+    background: transparent;
+    color: var(--cq-primary);
+    padding: 6px 2px;
+}
+
+.cq-btn-link:hover {
+    background: transparent;
+    text-decoration: underline;
+}
+
+.cq-note {
+    margin: 14px 0 0;
+    font-size: 12px;
+    color: var(--cq-muted);
+    max-width: 62ch;
+}
+
+.cq-empty {
+    padding: 20px 0;
+    color: var(--cq-muted);
+}
+
+/* ---------------------------------------------------------------- form */
+
+.cq-form {
+    max-width: 640px;
+}
+
+.cq-field {
+    margin-bottom: 16px;
+}
+
+.cq-field label {
+    display: block;
+    margin-bottom: 4px;
+    font-weight: 600;
+    font-size: 12.5px;
+    color: var(--cq-ink-2);
+}
+
+.cq-field input[type="text"],
+.cq-field input[type="password"],
+.cq-field textarea {
+    font: inherit;
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid var(--cq-line-strong);
+    border-radius: 3px;
+    background: var(--cq-surface);
+    color: var(--cq-ink);
+}
+
+.cq-field textarea {
+    min-height: 76px;
+    resize: vertical;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12.5px;
+}
+
+.cq-field input:focus,
+.cq-field textarea:focus {
+    outline: none;
+    border-color: var(--cq-primary);
+    box-shadow: 0 0 0 2px rgba(0, 82, 204, 0.2);
+}
+
+.cq-hint {
+    margin: 4px 0 0;
+    font-size: 12px;
+    color: var(--cq-muted);
+}
+
+.cq-req {
+    color: var(--cq-crit);
+    font-weight: 700;
+}
+
+.cq-required-note {
+    margin: -6px 0 18px;
+    font-size: 12px;
+    color: var(--cq-muted);
+}
+
+.cq-error {
+    margin: 5px 0 0;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--cq-crit);
+}
+
+.cq-field input.cq-invalid,
+.cq-field textarea.cq-invalid {
+    border-color: var(--cq-crit);
+}
+
+.cq-field input.cq-invalid:focus,
+.cq-field textarea.cq-invalid:focus {
+    border-color: var(--cq-crit);
+    box-shadow: 0 0 0 2px rgba(174, 42, 25, 0.2);
+}
+
+.cq-field-row {
+    display: flex;
+    gap: 16px;
+}
+
+.cq-field-row > .cq-field {
+    flex: 1 1 0;
+}
+
+/* The probe result is the answer to a question the user just asked, so it carries weight and
+   a glyph - colour alone made it read as another hint line. */
+.cq-probe {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    margin: 4px 0 0;
+    font-size: 12.5px;
+    font-weight: 600;
+    line-height: 1.45;
+}
+
+.cq-probe:empty {
+    display: none;
+}
+
+.cq-probe-glyph {
+    flex: none;
+    font-weight: 700;
+}
+
+.cq-probe-ok {
+    color: var(--cq-good);
+}
+
+.cq-probe-fail {
+    color: var(--cq-crit);
+}
+
+/* Reachable, but nothing was verified - deliberately not green. */
+.cq-probe-note {
+    color: var(--cq-warn);
+}
+
+.cq-details {
+    margin-bottom: 16px;
+    border-top: 1px solid var(--cq-line);
+    padding-top: 12px;
+}
+
+.cq-details > summary {
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 12.5px;
+    color: var(--cq-ink-2);
+}
+
+.cq-details[open] > summary {
+    margin-bottom: 12px;
+}
+
+@media (max-width: 640px) {
+    .cq-table thead {
+        display: none;
+    }
+
+    .cq-table tr {
+        display: block;
+        border-bottom: 1px solid var(--cq-line);
+        padding: 10px 0;
+    }
+
+    .cq-table td {
+        display: block;
+        border: 0;
+        padding: 2px 0;
+    }
+
+    .cq-table colgroup {
+        display: none;
+    }
+
+    .cq-url {
+        white-space: normal;
+        word-break: break-all;
+    }
+
+    .cq-row-actions {
+        justify-content: flex-start;
+        margin-top: 8px;
+    }
+
+    .cq-field-row {
+        flex-direction: column;
+        gap: 0;
+    }
+}

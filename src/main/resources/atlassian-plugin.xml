@@ -1,0 +1,73 @@
+<atlassian-plugin key="${atlassian.plugin.key}" name="${project.name}" plugins-version="2">
+    <plugin-info>
+        <description>${project.description}</description>
+        <version>${project.version}</version>
+        <vendor name="${project.organization.name}" url="${project.organization.url}"/>
+        <param name="plugin-icon">images/pluginIcon.png</param>
+        <param name="plugin-logo">images/pluginLogo.png</param>
+    </plugin-info>
+
+    <resource type="i18n" name="i18n" location="code-quality"/>
+
+    <!-- Loaded into pages that host the macro. The standalone servlet pages inline the same
+         two files instead, so there is exactly one copy of the table's CSS and JS. -->
+    <web-resource key="code-quality-resources" name="Code Quality Web Resources">
+        <dependency>com.atlassian.auiplugin:ajs</dependency>
+        <resource type="download" name="code-quality.css" location="/css/code-quality.css"/>
+        <resource type="download" name="code-quality.js" location="/js/code-quality.js"/>
+        <!-- Serves the macro browser icon; without a served path the macro shows no icon. -->
+        <resource type="download" name="images/" location="/images"/>
+        <context>code-quality</context>
+    </web-resource>
+
+    <ao key="code-quality-ao">
+        <entity>co.bskim.confluence.codequality.ao.CqRepo</entity>
+        <entity>co.bskim.confluence.codequality.ao.CqRun</entity>
+        <entity>co.bskim.confluence.codequality.ao.CqCommit</entity>
+        <entity>co.bskim.confluence.codequality.ao.CqClone</entity>
+    </ao>
+
+    <rest key="code-quality-rest" path="/code-quality" version="1.0">
+        <description>Repository registration and analysis control</description>
+        <package>co.bskim.confluence.codequality.rest</package>
+    </rest>
+
+    <!-- Undecorated on purpose: a full-bleed dashboard that must render on an instance with
+         no outbound network access. -->
+    <servlet key="code-quality-report" name="Code Quality Report"
+             class="co.bskim.confluence.codequality.servlet.ReportServlet">
+        <url-pattern>/code-quality/report</url-pattern>
+    </servlet>
+
+    <servlet key="code-quality-admin" name="Code Quality Repositories"
+             class="co.bskim.confluence.codequality.servlet.AdminServlet">
+        <url-pattern>/code-quality/admin</url-pattern>
+    </servlet>
+
+    <!-- Confluence's own items in this section stop at weight 120, so 200 puts this at the
+         bottom of the "Configuration" group rather than in the middle of them. -->
+    <web-item key="code-quality-admin-link" name="Code Quality Admin Link"
+              section="system.admin/configuration" weight="200">
+        <label key="cq.admin.section.label"/>
+        <link linkId="code-quality-admin-link-id">/plugins/servlet/code-quality/admin</link>
+    </web-item>
+
+    <xhtml-macro key="code-quality-macro" name="code-quality"
+                 class="co.bskim.confluence.codequality.macro.CodeQualityMacro"
+                 state="unrestricted">
+        <description key="cq.macro.description"/>
+        <category name="development"/>
+        <!-- The macro browser takes its icon from a download resource named exactly "icon" on
+             the macro module; a standalone <icon> element is ignored. -->
+        <resource type="download" name="icon" location="/images/pluginIcon.png">
+            <param name="content-type" value="image/png"/>
+            <param name="width" value="80"/>
+            <param name="height" value="80"/>
+        </resource>
+        <parameters>
+            <parameter name="repository" type="string"/>
+            <parameter name="title" type="string"/>
+        </parameters>
+    </xhtml-macro>
+
+</atlassian-plugin>
