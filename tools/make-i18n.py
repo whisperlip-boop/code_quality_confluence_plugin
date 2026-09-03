@@ -88,6 +88,13 @@ MESSAGES = [
     ("cq.ui.noneSelected",
      "No repository selected. Edit this macro and choose one or more.",
      "선택된 레포지터리가 없다. 이 매크로를 편집해 하나 이상 고를 것."),
+    # Used by the macro browser picker: the trigger label and its filter box. Distinct from
+    # ui.pickInDialog, which the preview pane shows and which points at this field - inside the
+    # field itself "on the left" points at nothing.
+    ("cq.ui.pickNone", "Choose repositories\u2026", "레포지터리 고르기\u2026"),
+    ("cq.ui.selectedSuffix", "selected", "개 선택됨"),
+    ("cq.ui.filterPlaceholder", "Filter", "검색"),
+    ("cq.ui.loading", "Loading\u2026", "불러오는 중\u2026"),
     ("cq.ui.pickInDialog",
      "Choose one or more repositories on the left.",
      "왼쪽에서 레포지터리를 하나 이상 고를 것."),

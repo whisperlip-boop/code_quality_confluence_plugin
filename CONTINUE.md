@@ -442,12 +442,20 @@ the page would have rendered `{0}` and looked fine at a glance.
 Three rounds of feedback on the same screen, and they converge on one thing: the macro had
 become a second administration console that happened to live on a page.
 
-**The Repository parameter is a checkbox list now.** A free-text field could not say what it
-wanted, because the stored names come in two shapes - entered by hand, from when the
+**The Repository parameter is a dropdown of checkboxes.** A free-text field could not say what
+it wanted, because the stored names come in two shapes - entered by hand, from when the
 registration form had a Name field, and `owner/repo` derived from the URL ever since - so one
 table showed `captureV` beside `whisperlip-boop/dept_calendar` with nothing to say which form
 the parameter took, and pasting the clone URL matched nothing at all. Choosing from the list
 removes the question instead of answering it.
+
+A dropdown rather than a list in the form, because the field has to stay one line tall however
+many repositories are registered - the first attempt laid the checkboxes out in the form and
+the reporter pointed out immediately that an instance with fifty of them would be unusable. The
+panel carries a filter box above eight repositories, which is the actual answer to scale.
+Built by hand rather than on `aui-dropdown2`: that component's JavaScript is in the macro
+browser context but its checkbox styling is not among the CSS loaded there, and another
+dependency on a Confluence internal is another thing that can quietly stop looking right.
 
 It hangs off `setMacroJsOverride`, the same hook Confluence's own inline-tasks macro uses, and
 is installed through `module-exporter`'s `safeRequire`: if a future Confluence changes those
@@ -494,6 +502,14 @@ opening the dialog shows that.
    is in path order - and pre-existing, but it is a real ceiling on very repetitive trees.
 
 ## Things worth knowing before touching the code
+
+- **A browser tab opened before a deploy runs the old JavaScript.** Confluence content-hashes
+  its resource URLs, so a reload picks up a new build - but a dialog left open, or a page loaded
+  before the upload finished, does not. Two rounds of "this is not what I deployed" turned out
+  to be exactly that, once with the giveaway that space tags were still rendering from a code
+  path that no longer exists. Reload before believing a screenshot.
+- Web resources are **minified** on the way out, so a local variable name will not be in the
+  served file. Grep for a string literal instead - those survive.
 
 - **Active Objects from the analysis thread needs SAL's `TransactionTemplate`**, reads included,
   and entities must not be read outside it - hence `RepoSnapshot`. Both failures only appear
