@@ -82,6 +82,13 @@
             <version>4.12</version>
             <scope>test</scope>
         </dependency>
+        <!-- JUnit 4 needs this at run time and the Atlassian parent does not bring it in. -->
+        <dependency>
+            <groupId>org.hamcrest</groupId>
+            <artifactId>hamcrest-core</artifactId>
+            <version>1.3</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>

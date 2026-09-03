@@ -4,6 +4,9 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 /**
  * Where each metric stops being fine.
  *
@@ -32,31 +35,64 @@ public final class Thresholds
     public double dupDeltaCrit = 15;
 
     /**
-     * Absolute duplication ratio, percent. Negative means "no basis" - and then the report
-     * shows no level grade rather than inventing one.
+     * Absolute duplication ratio bands, per dominant language.
      *
      * <p>Level and direction are separate questions. A repository can sit high and be cleaning
      * up, or sit low and be filling up fast; one badge covering both hides whichever it did not
      * pick.</p>
      *
-     * <p>The defaults are the 75th and 90th percentiles of a measured cohort: 19 public Python
-     * repositories (requests, flask, django-adjacent libraries, sqlalchemy, pydantic, fastapi
-     * and so on) run through this same detector with the same exclusions on 2026-09-02.
-     * Distribution: p25 1.2%, p50 2.7%, p75 5.3%, p90 8.7%. Getting there needed the
-     * exclusions to be right first - with tests and generated tables left in, black measured
-     * 22% (its {@code profiling/} data dumps) and rich 20% (one Unicode table per version),
-     * and the percentiles were meaningless.</p>
+     * <p>Each band is the 75th and 90th percentile of a measured cohort of public repositories
+     * run through this same detector with the same exclusions - see
+     * {@code tools/cohort-*.tsv}. A language with no cohort gets no level grade at all: the
+     * distribution differs per language, and borrowing another language's number would be a
+     * guess wearing a measurement's clothes. Getting the Python cohort usable needed the
+     * exclusions right first - with tests and generated tables left in, black measured 22%
+     * (its {@code profiling/} data dumps) and rich 20% (one Unicode table per version), and the
+     * percentiles were meaningless.</p>
      *
-     * <p>They apply only to a repository whose dominant language is
-     * {@link #dupRatioLanguage}: the distribution differs per language, and a Python-derived
-     * number applied to Java would be a guess wearing a measurement's clothes. Other languages
-     * get no level grade until their own cohort is measured. Replace all of this with your own
-     * repositories' distribution once you have five or more.</p>
+     * <p>Replace all of this with your own repositories' distribution once you have five or
+     * more per language.</p>
      */
-    public double dupRatioWarn = 5.3;
-    public double dupRatioCrit = 8.7;
-    public String dupRatioLanguage = "PYTHON";
-    public String dupRatioBasis = "python-cohort-2026-09-02-n19-p75-p90";
+    public Map<String, LevelBand> dupRatioByLanguage = defaultDupBands();
+
+    /** One language's warn/act band and where it came from. */
+    public static final class LevelBand
+    {
+        public double warn;
+        public double crit;
+        public int cohortSize;
+        public String basis = "";
+
+        public LevelBand()
+        {
+        }
+
+        LevelBand(double warn, double crit, int cohortSize, String basis)
+        {
+            this.warn = warn;
+            this.crit = crit;
+            this.cohortSize = cohortSize;
+            this.basis = basis;
+        }
+    }
+
+    private static Map<String, LevelBand> defaultDupBands()
+    {
+        Map<String, LevelBand> bands = new LinkedHashMap<String, LevelBand>();
+        bands.put("PYTHON", new LevelBand(5.3, 8.7, 19, "python-cohort-2026-09-02"));
+        return bands;
+    }
+
+    /** The band for a dominant language, or null when that language has no cohort. */
+    public LevelBand bandFor(String language)
+    {
+        if (dupRatioByLanguage == null || language == null || language.isEmpty())
+        {
+            return null;
+        }
+        LevelBand band = dupRatioByLanguage.get(language);
+        return band != null && band.warn > 0 && band.crit > 0 ? band : null;
+    }
 
     /**
      * Below this many lines of absolute change, no direction is claimed.

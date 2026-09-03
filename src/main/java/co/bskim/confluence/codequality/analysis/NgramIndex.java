@@ -13,18 +13,42 @@ import java.util.Map;
  * not survive a real repository, so files are added and removed one at a time as commits are
  * replayed. Buckets only carry candidate locations - the caller always re-compares the actual
  * lines, so a hash collision costs a comparison rather than a wrong number.</p>
+ *
+ * <p><b>Every</b> location is kept. An earlier version capped each bucket, which made the
+ * contents depend on the order files were inserted and so made the copy/move verdict depend on
+ * whether the run was full or incremental - see {@link AnalysisConfig#MAX_INDEX_ENTRIES}. The
+ * index is now a pure function of the tree it holds, which is what lets the same commit produce
+ * the same numbers however the analysis got there.</p>
  */
 final class NgramIndex
 {
+    /** Raised rather than degrading into wrong-but-plausible numbers. */
+    static final class IndexTooLargeException extends RuntimeException
+    {
+        private static final long serialVersionUID = 1L;
+
+        IndexTooLargeException(int entries)
+        {
+            super("The analysable tree is too large to index (" + entries
+                    + " windows, limit " + AnalysisConfig.MAX_INDEX_ENTRIES
+                    + "). Narrow the exclude patterns or analyse a smaller subtree.");
+        }
+    }
+
     private static final long[] EMPTY = new long[0];
 
     private final Map<Long, long[]> buckets = new HashMap<Long, long[]>();
+    private int entries;
 
     void addFile(int pathId, List<String> norm)
     {
         int limit = norm.size() - AnalysisConfig.RUN;
         for (int i = 0; i <= limit; i++)
         {
+            if (++entries > AnalysisConfig.MAX_INDEX_ENTRIES)
+            {
+                throw new IndexTooLargeException(entries);
+            }
             long h = hash(norm, i);
             long packed = pack(pathId, i);
             long[] bucket = buckets.get(h);
@@ -32,14 +56,12 @@ final class NgramIndex
             {
                 buckets.put(h, new long[] { packed });
             }
-            else if (bucket.length < AnalysisConfig.MAX_INDEX_BUCKET)
+            else
             {
                 long[] grown = Arrays.copyOf(bucket, bucket.length + 1);
                 grown[bucket.length] = packed;
                 buckets.put(h, grown);
             }
-            // A window occurring more than MAX_INDEX_BUCKET times is boilerplate; one more
-            // location would not change any verdict.
         }
     }
 
@@ -60,6 +82,10 @@ final class NgramIndex
                 if (unpackPath(packed) != pathId)
                 {
                     keep++;
+                }
+                else
+                {
+                    entries--;
                 }
             }
             if (keep == 0)

@@ -156,7 +156,9 @@ public final class AnalysisEngine
             outcome.headCommittedAt = commitTime(head);
 
             IdentityResolver identities = new IdentityResolver(readMailmap(head));
-            int replayFrom = replayFloor(chain, cached, previousRunAt);
+            Set<Integer> sampledIndices = sampleIndices(chain);
+            int replayFrom = floorForSampledGaps(chain, cached, sampledIndices,
+                    replayFloor(chain, cached, previousRunAt));
             outcome.replayedFrom = replayFrom;
 
             List<CommitStats> stats = new ArrayList<CommitStats>(chain.size());
@@ -172,7 +174,6 @@ public final class AnalysisEngine
                 materialise(state, chain.get(replayFrom - 1));
             }
 
-            Set<Integer> sampledIndices = sampleIndices(chain, replayFrom);
             int[] churnByIndex = new int[chain.size()];
             ChurnTracker churn = new ChurnTracker(AnalysisConfig.CHURN_WINDOW_MS);
             DiffFormatter differ = newDiffFormatter();
@@ -540,36 +541,76 @@ public final class AnalysisEngine
     }
 
     /**
-     * One sample per calendar day of history, thinned when the history is long. Static metrics
-     * are the expensive part of a run, and a per-commit series buys nothing over a daily one.
+     * Which commits get a full static pass. A pure function of the whole chain.
+     *
+     * <p>This used to bucket only the replayed range, so an incremental run over 28 days
+     * sampled every day while a full run over five years sampled every ninth - and the same
+     * commit came out sampled in one and unsampled in the other. That changed which commit
+     * {@code ReportBuilder} picked as its 90-day reference, so the trend delta moved with no
+     * change to the code. Bucketing the entire chain makes the set depend on the history and
+     * not on how much of it this run happened to touch.</p>
      */
-    private Set<Integer> sampleIndices(List<RevCommit> chain, int replayFrom)
+    private Set<Integer> sampleIndices(List<RevCommit> chain)
     {
-        Set<Integer> sampled = new HashSet<Integer>();
         long day = 24L * 60 * 60 * 1000;
-        long lastBucket = Long.MIN_VALUE;
-        List<Integer> buckets = new ArrayList<Integer>();
-        for (int i = replayFrom; i < chain.size(); i++)
+        List<Integer> firstOfDay = new ArrayList<Integer>();
+        long previousBucket = Long.MIN_VALUE;
+        for (int i = 0; i < chain.size(); i++)
         {
             long bucket = commitTime(chain.get(i)) / day;
-            if (bucket != lastBucket)
+            if (bucket != previousBucket)
             {
-                lastBucket = bucket;
-                buckets.add(i);
+                previousBucket = bucket;
+                firstOfDay.add(i);
             }
         }
-        int step = Math.max(1, (buckets.size() + AnalysisConfig.STATIC_SAMPLE_TARGET * 5 - 1)
-                / (AnalysisConfig.STATIC_SAMPLE_TARGET * 5));
-        for (int k = 0; k < buckets.size(); k += step)
+
+        int step = Math.max(1, (firstOfDay.size() + AnalysisConfig.STATIC_SAMPLE_TARGET - 1)
+                / AnalysisConfig.STATIC_SAMPLE_TARGET);
+        Set<Integer> sampled = new HashSet<Integer>();
+        for (int k = 0; k < firstOfDay.size(); k += step)
         {
-            sampled.add(buckets.get(k));
+            sampled.add(firstOfDay.get(k));
         }
-        if (replayFrom < chain.size())
+        if (!chain.isEmpty())
         {
-            sampled.add(replayFrom);
+            // The ends anchor every series: the first point and HEAD.
+            sampled.add(0);
             sampled.add(chain.size() - 1);
         }
         return sampled;
+    }
+
+    /**
+     * Pulls the replay floor back far enough to cover any sampled commit whose cached row has
+     * no static metrics.
+     *
+     * <p>Without this the sampled set could be right while the data behind it was missing: a
+     * commit sampled now but not when it was first analysed would sit in the cache with no LOC
+     * or duplication figure, and the report would pick a different reference point than a full
+     * run would. Rare - it takes the day count crossing a thinning threshold - and cheap to
+     * rule out.</p>
+     */
+    private int floorForSampledGaps(List<RevCommit> chain, Map<String, CommitStats> cached,
+                                    Set<Integer> sampled, int replayFrom)
+    {
+        if (cached == null || cached.isEmpty())
+        {
+            return replayFrom;
+        }
+        for (int i = 0; i < replayFrom; i++)
+        {
+            if (!sampled.contains(i))
+            {
+                continue;
+            }
+            CommitStats row = cached.get(chain.get(i).getName());
+            if (row == null || !row.sampled())
+            {
+                return i;
+            }
+        }
+        return replayFrom;
     }
 
     private void collectAuthors(List<CommitStats> stats, IdentityResolver identities,

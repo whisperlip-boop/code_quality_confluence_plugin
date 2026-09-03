@@ -59,11 +59,11 @@
 }
 
 .cq-table col.cq-col-name {
-    width: 22%;
+    width: 27%;
 }
 
 .cq-table col.cq-col-url {
-    width: 36%;
+    width: 31%;
 }
 
 .cq-table col.cq-col-sync {
@@ -131,6 +131,39 @@
     color: var(--cq-ink-2);
     font-size: 11px;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+/* Who can see the row, next to its name. */
+.cq-scope {
+    display: inline-block;
+    margin: 2px 4px 0 0;
+    padding: 0 6px;
+    border-radius: 3px;
+    background: #deebff;
+    color: #0747a6;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.cq-scope-private {
+    background: var(--cq-warn-bg);
+    color: var(--cq-warn);
+}
+
+.cq-spaces {
+    font: inherit;
+    width: 100%;
+    padding: 4px;
+    border: 1px solid var(--cq-line-strong);
+    border-radius: 3px;
+    background: var(--cq-surface);
+    color: var(--cq-ink);
+}
+
+.cq-spaces:focus {
+    outline: none;
+    border-color: var(--cq-primary);
+    box-shadow: 0 0 0 2px rgba(0, 82, 204, 0.2);
 }
 
 .cq-sync {
@@ -225,10 +258,27 @@
     cursor: default;
 }
 
-.cq-icon-btn svg {
-    width: 16px;
-    height: 16px;
+/* Masked artwork: the glyph is painted in currentColor, so hover and disabled states keep
+   working exactly as they did with inline SVG. */
+.cq-icon {
     display: block;
+    width: 18px;
+    height: 18px;
+    background-color: currentColor;
+    -webkit-mask-size: contain;
+    mask-size: contain;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    mask-position: center;
+}
+
+/* Fallback where masks are unsupported: the artwork in its own colour. */
+.cq-icon-plain {
+    background-color: transparent;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
 }
 
 .cq-icon-btn.cq-danger:hover:not([disabled]) {

@@ -1,10 +1,12 @@
 package co.bskim.confluence.codequality.rest;
 
 import co.bskim.confluence.codequality.git.GitClient;
+import co.bskim.confluence.codequality.git.RemoteUrl;
 import co.bskim.confluence.codequality.git.RepoAuth;
 import co.bskim.confluence.codequality.model.RepoSnapshot;
 import co.bskim.confluence.codequality.service.AnalysisJobManager;
 import co.bskim.confluence.codequality.service.RepositoryService;
+import co.bskim.confluence.codequality.service.TokenCipher;
 import co.bskim.confluence.codequality.web.AccessGuard;
 import co.bskim.confluence.codequality.web.UiStrings;
 import com.atlassian.plugin.spring.scanner.annotation.imports.ComponentImport;
@@ -64,7 +66,12 @@ public class RepoResource
         List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
         for (RepoSnapshot repo : repositories.all())
         {
-            rows.add(toDto(repo));
+            // Space-scoped: a row the caller cannot view is not listed at all, so probing
+            // sequential ids reveals nothing either.
+            if (access.canView(repo))
+            {
+                rows.add(toDto(repo));
+            }
         }
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
         payload.put("repos", rows);
@@ -82,18 +89,42 @@ public class RepoResource
             return error(Response.Status.FORBIDDEN, "Confluence administrator required");
         }
         JsonObject input = parse(body);
-        String url = string(input, "url");
-        if (url.isEmpty())
+        RemoteUrl remote;
+        try
         {
-            return error(Response.Status.BAD_REQUEST, "Repository URL is required");
+            remote = RemoteUrl.parse(string(input, "url"));
+        }
+        catch (RemoteUrl.InvalidRemoteException e)
+        {
+            return invalidUrl(e);
+        }
+        String url = remote.url;
+        // A token pasted into the URL is treated as a typed token: stored encrypted, and gone
+        // from the URL that gets saved and handed back.
+        String token = string(input, "token");
+        if (token.isEmpty() && remote.carriedCredentials())
+        {
+            token = remote.embeddedSecret;
+        }
+        String authUser = string(input, "authUser");
+        if (authUser.isEmpty() && !remote.embeddedUser.isEmpty())
+        {
+            authUser = remote.embeddedUser;
+        }
+        List<String> spaces = RepoSnapshot.splitKeys(string(input, "spaceKeys"));
+        List<String> unknown = access.unknownSpaceKeys(spaces);
+        if (!unknown.isEmpty())
+        {
+            return unknownSpaces(unknown);
         }
         String name = string(input, "name");
         RepoSnapshot repo = repositories.create(
                 name.isEmpty() ? deriveName(url) : name,
                 url,
                 string(input, "branch"),
-                string(input, "authUser"),
-                string(input, "token"),
+                authUser,
+                token,
+                RepoSnapshot.joinKeys(spaces),
                 string(input, "excludes"),
                 string(input, "thresholds"),
                 access.currentUserName());
@@ -110,10 +141,34 @@ public class RepoResource
             return error(Response.Status.FORBIDDEN, "Confluence administrator required");
         }
         JsonObject input = parse(body);
+        RemoteUrl remote;
+        try
+        {
+            remote = RemoteUrl.parse(string(input, "url"));
+        }
+        catch (RemoteUrl.InvalidRemoteException e)
+        {
+            return invalidUrl(e);
+        }
         // A missing token field means "keep what is stored"; an empty one means "remove it".
         String token = input.has("token") ? string(input, "token") : null;
-        RepoSnapshot repo = repositories.update(id, string(input, "name"), string(input, "url"),
-                string(input, "branch"), string(input, "authUser"), token,
+        if (remote.carriedCredentials() && (token == null || token.isEmpty()))
+        {
+            token = remote.embeddedSecret;
+        }
+        String authUser = string(input, "authUser");
+        if (authUser.isEmpty() && !remote.embeddedUser.isEmpty())
+        {
+            authUser = remote.embeddedUser;
+        }
+        List<String> spaces = RepoSnapshot.splitKeys(string(input, "spaceKeys"));
+        List<String> unknown = access.unknownSpaceKeys(spaces);
+        if (!unknown.isEmpty())
+        {
+            return unknownSpaces(unknown);
+        }
+        RepoSnapshot repo = repositories.update(id, string(input, "name"), remote.url,
+                string(input, "branch"), authUser, token, RepoSnapshot.joinKeys(spaces),
                 string(input, "excludes"), string(input, "thresholds"));
         if (repo == null)
         {
@@ -162,7 +217,8 @@ public class RepoResource
             return error(Response.Status.UNAUTHORIZED, "Login required");
         }
         RepoSnapshot repo = repositories.byId(id);
-        if (repo == null)
+        // Same answer for "no such repository" and "not yours", so ids cannot be enumerated.
+        if (repo == null || !access.canView(repo))
         {
             return error(Response.Status.NOT_FOUND, "Repository not found");
         }
@@ -179,6 +235,36 @@ public class RepoResource
         return Response.ok(new Gson().toJson(payload)).build();
     }
 
+    /** Spaces the caller can view, so the form offers a picker instead of typed keys. */
+    @GET
+    @Path("/spaces")
+    public Response spaces()
+    {
+        if (!access.isAdmin())
+        {
+            return error(Response.Status.FORBIDDEN, "Confluence administrator required");
+        }
+        List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
+        for (Map.Entry<String, String> space : access.viewableSpaces().entrySet())
+        {
+            Map<String, Object> row = new LinkedHashMap<String, Object>();
+            row.put("key", space.getKey());
+            row.put("name", space.getValue());
+            rows.add(row);
+        }
+        return Response.ok(new Gson().toJson(rows)).build();
+    }
+
+    private Response unknownSpaces(List<String> unknown)
+    {
+        Map<String, Object> payload = new LinkedHashMap<String, Object>();
+        payload.put("error", "Unknown space keys: " + RepoSnapshot.joinKeys(unknown));
+        payload.put("reason", "unknownSpaces");
+        payload.put("keys", unknown);
+        return Response.status(Response.Status.BAD_REQUEST)
+                .entity(new Gson().toJson(payload)).type(MediaType.APPLICATION_JSON).build();
+    }
+
     /** Checks a URL and its credentials before the repository is saved. */
     @POST
     @Path("/probe")
@@ -190,17 +276,48 @@ public class RepoResource
             return error(Response.Status.FORBIDDEN, "Confluence administrator required");
         }
         JsonObject input = parse(body);
-        String url = string(input, "url");
+        RemoteUrl remote;
+        try
+        {
+            remote = RemoteUrl.parse(string(input, "url"));
+        }
+        catch (RemoteUrl.InvalidRemoteException e)
+        {
+            return invalidUrl(e);
+        }
+        String url = remote.url;
         String token = string(input, "token");
-        int id = input.has("id") ? input.get("id").getAsInt() : 0;
+        if (token.isEmpty() && remote.carriedCredentials())
+        {
+            token = remote.embeddedSecret;
+        }
+        int id = integer(input, "id");
         if (token.isEmpty() && id > 0)
         {
             // Editing an existing repository without retyping the token.
-            RepoAuth stored = repositories.authFor(repositories.byId(id));
-            token = stored.token;
+            try
+            {
+                token = repositories.authFor(repositories.byId(id)).token;
+            }
+            catch (TokenCipher.TokenUnreadableException e)
+            {
+                Map<String, Object> payload = new LinkedHashMap<String, Object>();
+                payload.put("ok", false);
+                payload.put("branches", 0);
+                payload.put("anonymous", false);
+                payload.put("tokenVerified", false);
+                payload.put("tokenOffered", false);
+                payload.put("urlHadCredentials", false);
+                payload.put("error", "tokenUnreadable");
+                return Response.ok(new Gson().toJson(payload)).build();
+            }
         }
-        GitClient.ProbeResult probe =
-                gitClient.probe(url, new RepoAuth(string(input, "authUser"), token));
+        String probeUser = string(input, "authUser");
+        if (probeUser.isEmpty() && !remote.embeddedUser.isEmpty())
+        {
+            probeUser = remote.embeddedUser;
+        }
+        GitClient.ProbeResult probe = gitClient.probe(url, new RepoAuth(probeUser, token));
 
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
         payload.put("ok", probe.reachable);
@@ -209,6 +326,7 @@ public class RepoResource
         payload.put("tokenVerified", probe.tokenVerified);
         // Whether a token was offered at all, so the form can say it went unchecked.
         payload.put("tokenOffered", !token.isEmpty());
+        payload.put("urlHadCredentials", remote.carriedCredentials());
         payload.put("error", probe.error);
         return Response.ok(new Gson().toJson(payload)).build();
     }
@@ -225,6 +343,7 @@ public class RepoResource
         dto.put("authUser", repo.authUser);
         // The token itself never leaves the server.
         dto.put("hasToken", repo.hasToken());
+        dto.put("spaceKeys", RepoSnapshot.joinKeys(repo.spaceKeys));
         dto.put("excludes", repo.excludes);
         dto.put("thresholds", repo.thresholds);
         dto.put("status", repo.status);
@@ -288,6 +407,30 @@ public class RepoResource
             return parts.get(0);
         }
         return parts.get(parts.size() - 2) + "/" + parts.get(parts.size() - 1);
+    }
+
+    private Response invalidUrl(RemoteUrl.InvalidRemoteException e)
+    {
+        Map<String, Object> payload = new LinkedHashMap<String, Object>();
+        payload.put("error", e.getMessage());
+        // A stable key so the browser can word it in the reader's language.
+        payload.put("reason", e.reason());
+        return Response.status(Response.Status.BAD_REQUEST)
+                .entity(new Gson().toJson(payload)).type(MediaType.APPLICATION_JSON).build();
+    }
+
+    /** Tolerates a non-numeric id instead of throwing a 500 with a stack trace. */
+    private static int integer(JsonObject object, String key)
+    {
+        try
+        {
+            return object.has(key) && object.get(key).isJsonPrimitive()
+                    ? object.get(key).getAsInt() : 0;
+        }
+        catch (RuntimeException e)
+        {
+            return 0;
+        }
     }
 
     private static JsonObject parse(String body)

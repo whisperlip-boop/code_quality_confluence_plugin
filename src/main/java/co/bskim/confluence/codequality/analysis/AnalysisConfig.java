@@ -30,13 +30,35 @@ public final class AnalysisConfig
     public static final double IMPORT_RATIO = 0.5;
     public static final int IMPORT_MIN_LINES = 200;
 
-    /** Static metrics are sampled so that a long history stays affordable. */
-    public static final int STATIC_SAMPLE_TARGET = 40;
+    /**
+     * Most sampled points in a static-metric series.
+     *
+     * <p>Used directly. The old code multiplied this by five at the call site, so the constant
+     * said 40 and the behaviour was 200 - a name that lies is worse than no name.</p>
+     */
+    public static final int STATIC_SAMPLE_TARGET = 200;
 
     /** Safety rails so one huge repository cannot take the instance down. */
     public static final int MAX_COMMITS = 20000;
     public static final int MAX_FILE_BYTES = 2 * 1024 * 1024;
-    public static final int MAX_INDEX_BUCKET = 64;
+
+    /**
+     * Ceiling on the n-gram index, counted in window locations - roughly one per normalised
+     * line of the tree.
+     *
+     * <p>This replaced a per-bucket cap that silently discarded locations once a window had
+     * been seen 64 times. That cap made the result depend on the order files entered the index,
+     * and a full run inserts files as commits touch them while an incremental run materialises
+     * a tree in path order - so the same commit could be classified as a copy by one and a move
+     * by the other. No bounded-bucket scheme fixes it either: whether a window counts as
+     * boilerplate then depends on the history the index went through rather than on the tree it
+     * currently holds.</p>
+     *
+     * <p>So the index keeps every location, and a tree too large to index fails the analysis
+     * with a message saying so. A wrong number that looks right is worse than a run that stops
+     * and tells you to narrow the exclusions.</p>
+     */
+    public static final int MAX_INDEX_ENTRIES = 3_000_000;
     public static final int MAX_CLONE_PAIRS = 400;
 
     /** Paths that are checked in but not written by the team. */

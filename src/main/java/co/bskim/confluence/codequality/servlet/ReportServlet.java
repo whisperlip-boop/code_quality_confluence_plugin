@@ -52,7 +52,9 @@ public class ReportServlet extends HttpServlet
 
         int repoId = parseInt(request.getParameter("repo"));
         RepoSnapshot repo = repoId > 0 ? repositories.byId(repoId) : null;
-        if (repo == null)
+        // Not-found and not-permitted answer alike, so walking repo=1,2,3 tells nobody which
+        // repositories exist.
+        if (repo == null || !access.canView(repo))
         {
             response.sendError(HttpServletResponse.SC_NOT_FOUND, "Repository not found");
             return;

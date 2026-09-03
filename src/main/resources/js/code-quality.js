@@ -57,12 +57,16 @@
                 if (xhr.status >= 200 && xhr.status < 300) {
                     resolve(parsed);
                 } else {
-                    reject(new Error(parsed && parsed.error ? parsed.error
-                        : 'HTTP ' + xhr.status));
+                    var failure = new Error(parsed && parsed.error ? parsed.error
+                        : 'HTTP ' + xhr.status);
+                    if (parsed && parsed.reason) {
+                        failure.reason = parsed.reason;
+                    }
+                    reject(failure);
                 }
             };
             xhr.onerror = function () {
-                reject(new Error('Network error'));
+                reject(new Error(text('ui.probeNetwork')));
             };
             xhr.send(body === undefined ? null : JSON.stringify(body));
         });
@@ -97,24 +101,33 @@
         return node;
     }
 
-    /* Inline so the icons work with no image requests and inherit currentColor. */
-    var ICONS = {
-        analyze: 'M13.65 2.35A8 8 0 1 0 16 8h-2a6 6 0 1 1-1.76-4.24L10 6h6V0z',
-        report: 'M4 1h6l4 4v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1zm5 1.5V6h3.5zM5.5 9h5v1.4h-5zm0 3h5v1.4h-5zm0-6h2.5v1.4H5.5z',
-        edit: 'M12.3 1.7a1 1 0 0 1 1.4 0l1.6 1.6a1 1 0 0 1 0 1.4L6.4 13.6 2 15l1.4-4.4zM11 4.4 12.6 6l1.1-1.1L12.1 3.3z',
-        remove: 'M6 2h4l.5 1H14v1.5H2V3h3.5zM3.5 5.5h11L13.6 15a1 1 0 0 1-1 .9H4.4a1 1 0 0 1-1-.9zm3 2 .3 6h1.4l-.3-6zm4.3 0h-1.4l-.3 6h1.4z'
-    };
+    var PLUGIN_KEY = 'co.bskim.confluence.code-quality';
+    var ICON_BASE = contextPath() + '/download/resources/' + PLUGIN_KEY
+        + ':code-quality-resources/images/';
+
+    /*
+     * The icons are single-colour silhouettes, so they are painted as CSS masks rather than
+     * dropped in as <img>. That keeps the behaviour the inline SVGs had - the glyph inherits
+     * currentColor, so it dims when the button is disabled and turns blue (or red, for delete)
+     * on hover - which an <img> cannot do. Where masks are unsupported the image is shown
+     * as-is: the original artwork colour, still perfectly legible.
+     */
+    var MASK_SUPPORTED = (function () {
+        var style = document.createElement('span').style;
+        return 'maskImage' in style || 'webkitMaskImage' in style;
+    }());
 
     function icon(name) {
-        var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        svg.setAttribute('viewBox', '0 0 16 16');
-        svg.setAttribute('aria-hidden', 'true');
-        svg.setAttribute('focusable', 'false');
-        var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        path.setAttribute('d', ICONS[name]);
-        path.setAttribute('fill', 'currentColor');
-        svg.appendChild(path);
-        return svg;
+        var url = ICON_BASE + name + '-icon.png';
+        var glyph = el('span', { 'class': 'cq-icon', 'aria-hidden': 'true' });
+        if (MASK_SUPPORTED) {
+            glyph.style.webkitMaskImage = 'url("' + url + '")';
+            glyph.style.maskImage = 'url("' + url + '")';
+        } else {
+            glyph.classList.add('cq-icon-plain');
+            glyph.style.backgroundImage = 'url("' + url + '")';
+        }
+        return glyph;
     }
 
     function iconButton(name, label, handler, options) {
@@ -127,6 +140,14 @@
             disabled: opts.disabled ? true : null,
             onclick: handler
         }, [icon(name)]);
+    }
+
+    /*
+     * Only http(s) reaches an href. An unvalidated scheme here was stored XSS: an administrator
+     * saving a javascript: URL fired it for every reader of the table.
+     */
+    function linkable(url) {
+        return /^https?:\/\//i.test(url || '');
     }
 
     function relativeTime(millis) {
@@ -289,7 +310,7 @@
                 };
                 self.render();
             }));
-            actions.push(iconButton('remove', text('ui.delete'), function () {
+            actions.push(iconButton('delete', text('ui.delete'), function () {
                 if (window.confirm(text('ui.confirmDelete', [repo.name]))) {
                     self.remove(repo);
                 }
@@ -300,12 +321,27 @@
         if (repo.branch) {
             nameCell.push(el('span', { 'class': 'cq-branch', text: repo.branch }));
         }
+        // Visibility is a property worth seeing at a glance, not buried in the edit form.
+        var spaces = (repo.spaceKeys || '').split(',').filter(function (k) {
+            return k !== '';
+        });
+        if (spaces.length === 0) {
+            nameCell.push(el('span', {
+                'class': 'cq-scope cq-scope-private', text: text('ui.spacesAdminOnly')
+            }));
+        } else {
+            spaces.forEach(function (key) {
+                nameCell.push(el('span', { 'class': 'cq-scope', text: key }));
+            });
+        }
 
         return el('tr', null, [
             el('td', null, nameCell),
             el('td', { 'class': 'cq-url', title: repo.url }, [
-                el('a', { href: repo.url, target: '_blank', rel: 'noopener noreferrer',
-                    text: repo.url })
+                linkable(repo.url)
+                    ? el('a', { href: repo.url, target: '_blank', rel: 'noopener noreferrer',
+                        text: repo.url })
+                    : el('span', { text: repo.url })
             ]),
             el('td', { 'class': 'cq-sync', text: relativeTime(repo.lastSyncedAt) }),
             el('td', null, statusCell),
@@ -361,6 +397,28 @@
 
         var probeNote = el('p', { 'class': 'cq-probe' });
 
+        var selected = (draft.spaceKeys || '').split(',').filter(function (k) {
+            return k !== '';
+        });
+        var spacePicker = el('select', { multiple: true, size: 6, 'class': 'cq-spaces' });
+        fields.spaceKeys = spacePicker;
+        var spaceNote = el('p', { 'class': 'cq-hint', text: text('ui.form.spacesLoading') });
+        request('GET', API + '/spaces').then(function (spaces) {
+            spacePicker.textContent = '';
+            (spaces || []).forEach(function (space) {
+                var option = el('option', {
+                    value: space.key,
+                    text: space.name + '  (' + space.key + ')'
+                });
+                option.selected = selected.indexOf(space.key) >= 0;
+                spacePicker.appendChild(option);
+            });
+            spaceNote.textContent = (spaces || []).length === 0
+                ? text('ui.form.spacesNone') : text('ui.form.spacesHint');
+        }).catch(function () {
+            spaceNote.textContent = text('ui.form.spacesHint');
+        });
+
         // Only what the common case needs: the URL, which branch, and a token for a private
         // repository. Name is derived from the URL and User name is ignored by GitHub, so both
         // sit under Advanced - offered up front they read as required and invite a wrong guess.
@@ -375,6 +433,15 @@
                     draft.hasToken ? text('ui.form.tokenKeep') : text('ui.form.tokenHint'))
             ]),
             probeNote,
+            el('div', { 'class': 'cq-field' }, [
+                el('label', null, [
+                    document.createTextNode(text('ui.form.spaces')),
+                    el('span', { 'class': 'cq-req', 'aria-hidden': 'true', text: ' *' })
+                ]),
+                spacePicker,
+                errors.spaceKeys = el('p', { 'class': 'cq-error', role: 'alert', hidden: true }),
+                spaceNote
+            ]),
             el('details', { 'class': 'cq-details', open: draft.id ? true : null }, [
                 el('summary', { text: text('ui.form.advanced') }),
                 el('div', { 'class': 'cq-field-row' }, [
@@ -390,11 +457,23 @@
                     'class': 'cq-btn cq-btn-primary', type: 'button', text: text('ui.save'),
                     onclick: function () {
                         clearError('url');
+                        clearError('spaceKeys');
                         if (fields.url.value.trim() === '') {
                             showError('url', text('ui.form.urlRequired'));
                             return;
                         }
-                        self.save(draft, fields);
+                        // Fail-closed is only defensible if the person is told, so an empty
+                        // selection is confirmed rather than silently accepted.
+                        var anySpace = false;
+                        for (var i = 0; i < fields.spaceKeys.options.length; i++) {
+                            anySpace = anySpace || fields.spaceKeys.options[i].selected;
+                        }
+                        if (!anySpace && !window.confirm(text('ui.form.spacesEmptyConfirm'))) {
+                            return;
+                        }
+                        self.save(draft, fields, function (message, field) {
+                            showError(field || 'url', message);
+                        });
                     }
                 }),
                 el('button', {
@@ -414,7 +493,14 @@
                         }).then(function (result) {
                             describeProbe(probeNote, result);
                         }).catch(function (error) {
-                            setProbe(probeNote, 'fail', text('ui.probeFail', [error.message]));
+                            if (error.reason) {
+                                clearError('url');
+                                showError('url', text('ui.urlError.' + error.reason));
+                                probeNote.className = 'cq-probe';
+                                probeNote.textContent = '';
+                                return;
+                            }
+                            setProbe(probeNote, 'fail', text('ui.probeNetwork'));
                         });
                     }
                 }),
@@ -432,13 +518,21 @@
 
     // ---------------------------------------------------------------- actions
 
-    App.prototype.save = function (draft, fields) {
+    App.prototype.save = function (draft, fields, onUrlRejected) {
         var self = this;
+        var chosen = [];
+        var options = fields.spaceKeys.options;
+        for (var i = 0; i < options.length; i++) {
+            if (options[i].selected) {
+                chosen.push(options[i].value);
+            }
+        }
         var body = {
             name: fields.name.value.trim(),
             url: fields.url.value.trim(),
             branch: fields.branch.value.trim(),
             authUser: fields.authUser.value.trim(),
+            spaceKeys: chosen.join(','),
             excludes: fields.excludes.value
         };
         // An untouched password box on an existing repository must not clear the stored token.
@@ -455,6 +549,14 @@
             self.editing = null;
             return self.load();
         }).catch(function (error) {
+            if (error.reason === 'unknownSpaces') {
+                onUrlRejected(text('ui.urlError.unknownSpaces'), 'spaceKeys');
+                return;
+            }
+            if (error.reason) {
+                onUrlRejected(text('ui.urlError.' + error.reason));
+                return;
+            }
             window.alert(text('ui.error', [error.message]));
         });
     };
@@ -537,7 +639,7 @@
         var message;
         if (!result || !result.ok) {
             tone = 'fail';
-            message = text('ui.probeFail', [result ? result.error : '']);
+            message = text('ui.probeError.' + ((result && result.error) || 'unreachable'));
         } else if (result.tokenVerified) {
             message = text('ui.probeAuthed', [result.branches]);
         } else if (result.tokenOffered) {
@@ -545,6 +647,9 @@
             message = text('ui.probePublicToken', [result.branches]);
         } else {
             message = text('ui.probePublic', [result.branches]);
+        }
+        if (result && result.urlHadCredentials) {
+            message += ' ' + text('ui.urlCredentialsMoved');
         }
         setProbe(node, tone, message);
     }

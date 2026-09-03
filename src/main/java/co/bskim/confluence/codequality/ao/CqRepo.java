@@ -38,6 +38,17 @@ public interface CqRepo extends Entity
     String getAuthSecret();
     void setAuthSecret(String authSecret);
 
+    /**
+     * Space keys this repository is visible in, comma separated.
+     *
+     * <p>Empty means administrators only. Fail-closed on purpose: a repository nobody linked
+     * yet holds a private codebase's file paths, commit subjects and author addresses, and the
+     * safe reading of "not configured" is "not shared".</p>
+     */
+    @StringLength(StringLength.UNLIMITED)
+    String getSpaceKeys();
+    void setSpaceKeys(String spaceKeys);
+
     /** Newline-separated path globs excluded from analysis, on top of the built-in defaults. */
     @StringLength(StringLength.UNLIMITED)
     String getExcludes();

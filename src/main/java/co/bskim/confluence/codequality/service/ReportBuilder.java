@@ -154,6 +154,7 @@ public final class ReportBuilder
         String dirDup = Thresholds.UNKNOWN;
         String dupAxis = "";
         boolean dupLevelApplicable;
+        Thresholds.LevelBand dupBand;
         String dominantLanguage = "";
 
         double legacyComplexity;
@@ -283,11 +284,11 @@ public final class ReportBuilder
                                             Thresholds t, CommitStats reference)
     {
         a.dominantLanguage = outcome.dominantLanguage();
-        a.dupLevelApplicable = t.dupRatioWarn >= 0
-                && (t.dupRatioLanguage == null || t.dupRatioLanguage.isEmpty()
-                    || t.dupRatioLanguage.equals(a.dominantLanguage));
-        a.stateDupLevel = a.dupLevelApplicable
-                ? Thresholds.lowerIsBetter(a.dupPct, t.dupRatioWarn, t.dupRatioCrit)
+        Thresholds.LevelBand band = t.bandFor(a.dominantLanguage);
+        a.dupLevelApplicable = band != null;
+        a.dupBand = band;
+        a.stateDupLevel = band != null
+                ? Thresholds.lowerIsBetter(a.dupPct, band.warn, band.crit)
                 : Thresholds.UNKNOWN;
 
         if (reference == null || a.dupLinesThen < 0)
@@ -436,9 +437,10 @@ public final class ReportBuilder
                 pair("direction", a.dirDup),
                 pair("levelApplicable", a.dupLevelApplicable ? 1 : 0),
                 pair("language", a.dominantLanguage),
-                pair("basis", t.dupRatioBasis),
-                pair("levelWarn", t.dupRatioWarn),
-                pair("levelCrit", t.dupRatioCrit),
+                pair("basis", a.dupBand == null ? "" : a.dupBand.basis),
+                pair("cohortSize", a.dupBand == null ? 0 : a.dupBand.cohortSize),
+                pair("levelWarn", a.dupBand == null ? 0 : a.dupBand.warn),
+                pair("levelCrit", a.dupBand == null ? 0 : a.dupBand.crit),
                 pair("floorLines", t.dupDeltaFloorLines));
         kpis.add(dup);
 

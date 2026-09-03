@@ -1,0 +1,237 @@
+package co.bskim.confluence.codequality.git;
+
+import java.net.InetAddress;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.UnknownHostException;
+import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+/**
+ * Validates and sanitises a clone URL before anything is stored or fetched.
+ *
+ * <p>Three things went wrong without this. A URL of the documented GitHub form
+ * {@code https://x-access-token:ghp_xxx@github.com/acme/billing.git} put a personal access
+ * token into the database in clear text - bypassing {@link co.bskim.confluence.codequality
+ * .service.TokenCipher} entirely - and handed it back to every logged-in user through the REST
+ * list and the report page. {@code file:///var/atlassian/...} cloned another repository off the
+ * server's own disk and published it. And an unchecked scheme reached the browser as an
+ * {@code href}, so {@code javascript:} was stored XSS.</p>
+ *
+ * <p><b>Private address ranges are allowed on purpose.</b> An internal GitLab on 10.x is the
+ * main thing this plugin is pointed at; blocking it to prevent port scanning would close the
+ * product rather than the hole. The scanning signal came from returning raw connection errors
+ * to the caller, and that is closed in {@link GitClient} by reporting a category instead.
+ * Loopback, link-local (which covers the cloud metadata address) and wildcard addresses are
+ * refused, because no real remote lives there.</p>
+ */
+public final class RemoteUrl
+{
+    /** Thrown for anything that must not be stored or fetched. */
+    public static final class InvalidRemoteException extends Exception
+    {
+        private static final long serialVersionUID = 1L;
+        private final String reason;
+
+        InvalidRemoteException(String reason, String message)
+        {
+            super(message);
+            this.reason = reason;
+        }
+
+        /** Stable key for the message shown to the user. */
+        public String reason()
+        {
+            return reason;
+        }
+    }
+
+    private static final int MAX_LENGTH = 2000;
+    /** {@code git@host:owner/repo.git} - the scp-like form, which is not a URI. */
+    private static final Pattern SCP_LIKE =
+            Pattern.compile("^([A-Za-z0-9._%+-]+)@([A-Za-z0-9.\\-]+):(?!//)(.+)$");
+
+    /** The sanitised URL: identical to the input except that any userinfo is gone. */
+    public final String url;
+    /** User name taken from the URL's userinfo, or empty. */
+    public final String embeddedUser;
+    /** Secret taken from the URL's userinfo, or empty. Treated exactly like a typed token. */
+    public final String embeddedSecret;
+
+    private RemoteUrl(String url, String embeddedUser, String embeddedSecret)
+    {
+        this.url = url;
+        this.embeddedUser = embeddedUser;
+        this.embeddedSecret = embeddedSecret;
+    }
+
+    public boolean carriedCredentials()
+    {
+        return !embeddedSecret.isEmpty();
+    }
+
+    public static RemoteUrl parse(String raw) throws InvalidRemoteException
+    {
+        if (raw == null || raw.trim().isEmpty())
+        {
+            throw new InvalidRemoteException("empty", "Repository URL is required");
+        }
+        String cleaned = raw.trim();
+        if (cleaned.length() > MAX_LENGTH)
+        {
+            throw new InvalidRemoteException("tooLong", "Repository URL is too long");
+        }
+        for (int i = 0; i < cleaned.length(); i++)
+        {
+            if (cleaned.charAt(i) < 0x20 || cleaned.charAt(i) == 0x7f)
+            {
+                throw new InvalidRemoteException("control",
+                        "Repository URL contains a control character");
+            }
+        }
+
+        Matcher scp = SCP_LIKE.matcher(cleaned);
+        if (scp.matches())
+        {
+            // git@host:owner/repo - ssh, and it cannot carry a password.
+            checkHost(scp.group(2));
+            return new RemoteUrl(cleaned, scp.group(1), "");
+        }
+
+        URI uri;
+        try
+        {
+            uri = new URI(cleaned);
+        }
+        catch (URISyntaxException e)
+        {
+            throw new InvalidRemoteException("malformed", "Repository URL is not a valid URL");
+        }
+
+        String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase(Locale.ROOT);
+        if (!"https".equals(scheme) && !"ssh".equals(scheme))
+        {
+            // Everything else is refused by name: file: reads the server's disk, git: and ftp:
+            // are unauthenticated, javascript: and data: reach the browser as an href, and a
+            // bare path is a local clone.
+            throw new InvalidRemoteException("scheme",
+                    "Only https:// and ssh:// repository URLs are accepted");
+        }
+        if (uri.getHost() == null || uri.getHost().isEmpty())
+        {
+            throw new InvalidRemoteException("host", "Repository URL has no host");
+        }
+        checkHost(uri.getHost());
+
+        String userInfo = uri.getUserInfo();
+        String user = "";
+        String secret = "";
+        if (userInfo != null && !userInfo.isEmpty())
+        {
+            int colon = userInfo.indexOf(':');
+            user = colon < 0 ? userInfo : userInfo.substring(0, colon);
+            secret = colon < 0 ? "" : userInfo.substring(colon + 1);
+        }
+
+        String sanitised = rebuildWithoutUserInfo(uri, cleaned);
+        return new RemoteUrl(sanitised, user, secret);
+    }
+
+    /**
+     * Strips userinfo without validating anything.
+     *
+     * <p>Rows written before validation existed may already carry a token in the URL, so this
+     * runs on the way out as well as on the way in. A URL that cannot be parsed is returned
+     * unchanged only when it holds no {@code @} before the first slash - otherwise the part
+     * before it is dropped, because a token there matters more than a tidy URL.</p>
+     */
+    public static String sanitiseForDisplay(String raw)
+    {
+        if (raw == null || raw.isEmpty())
+        {
+            return "";
+        }
+        String cleaned = raw.trim();
+        try
+        {
+            URI uri = new URI(cleaned);
+            if (uri.getUserInfo() != null)
+            {
+                return rebuildWithoutUserInfo(uri, cleaned);
+            }
+            return cleaned;
+        }
+        catch (URISyntaxException e)
+        {
+            int scheme = cleaned.indexOf("://");
+            if (scheme < 0)
+            {
+                return cleaned;
+            }
+            int slash = cleaned.indexOf('/', scheme + 3);
+            int at = cleaned.lastIndexOf('@', slash < 0 ? cleaned.length() - 1 : slash);
+            return at > scheme
+                    ? cleaned.substring(0, scheme + 3) + cleaned.substring(at + 1)
+                    : cleaned;
+        }
+    }
+
+    private static String rebuildWithoutUserInfo(URI uri, String original)
+    {
+        if (uri.getUserInfo() == null)
+        {
+            return original;
+        }
+        StringBuilder out = new StringBuilder();
+        out.append(uri.getScheme()).append("://").append(uri.getHost());
+        if (uri.getPort() > 0)
+        {
+            out.append(':').append(uri.getPort());
+        }
+        if (uri.getRawPath() != null)
+        {
+            out.append(uri.getRawPath());
+        }
+        if (uri.getRawQuery() != null)
+        {
+            out.append('?').append(uri.getRawQuery());
+        }
+        return out.toString();
+    }
+
+    /**
+     * Refuses addresses no real remote lives at. Private ranges are deliberately not refused -
+     * see the class comment.
+     */
+    private static void checkHost(String host) throws InvalidRemoteException
+    {
+        String lower = host.toLowerCase(Locale.ROOT);
+        if ("localhost".equals(lower) || lower.endsWith(".localhost")
+                || "localhost.localdomain".equals(lower))
+        {
+            throw new InvalidRemoteException("localHost",
+                    "That host is not a valid repository location");
+        }
+        InetAddress[] addresses;
+        try
+        {
+            addresses = InetAddress.getAllByName(host);
+        }
+        catch (UnknownHostException e)
+        {
+            // An unresolvable name is not a security problem; the clone will fail on its own
+            // and say so. Refusing here would break split-horizon DNS on a Confluence node.
+            return;
+        }
+        for (InetAddress address : addresses)
+        {
+            if (address.isLoopbackAddress() || address.isAnyLocalAddress()
+                    || address.isLinkLocalAddress() || address.isMulticastAddress())
+            {
+                throw new InvalidRemoteException("localHost",
+                        "That host is not a valid repository location");
+            }
+        }
+    }
+}

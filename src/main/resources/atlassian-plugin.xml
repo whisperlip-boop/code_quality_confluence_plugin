@@ -20,6 +20,14 @@
         <context>code-quality</context>
     </web-resource>
 
+    <!-- The macro browser resolves its icon through a web-resource, so the icon lives in one
+         of its own rather than riding on the context-loaded bundle. -->
+    <web-resource key="code-quality-macro-icon" name="Code Quality Macro Icon">
+        <resource type="download" name="macro-icon.png" location="/images/macroIcon.png">
+            <param name="content-type" value="image/png"/>
+        </resource>
+    </web-resource>
+
     <ao key="code-quality-ao">
         <entity>co.bskim.confluence.codequality.ao.CqRepo</entity>
         <entity>co.bskim.confluence.codequality.ao.CqRun</entity>
@@ -52,18 +60,15 @@
         <link linkId="code-quality-admin-link-id">/plugins/servlet/code-quality/admin</link>
     </web-item>
 
+    <!-- The icon is an attribute on the macro element, not a child <icon> element and not a
+         download resource named "icon"; both of those are silently ignored. Confluence's own
+         code macro declares it exactly this way. -->
     <xhtml-macro key="code-quality-macro" name="code-quality"
                  class="co.bskim.confluence.codequality.macro.CodeQualityMacro"
-                 state="unrestricted">
+                 state="unrestricted"
+                 icon="/download/resources/${atlassian.plugin.key}:code-quality-macro-icon/macro-icon.png">
         <description key="cq.macro.description"/>
         <category name="development"/>
-        <!-- The macro browser takes its icon from a download resource named exactly "icon" on
-             the macro module; a standalone <icon> element is ignored. -->
-        <resource type="download" name="icon" location="/images/pluginIcon.png">
-            <param name="content-type" value="image/png"/>
-            <param name="width" value="80"/>
-            <param name="height" value="80"/>
-        </resource>
         <parameters>
             <parameter name="repository" type="string"/>
             <parameter name="title" type="string"/>

@@ -8,6 +8,7 @@ import co.bskim.confluence.codequality.ao.CqClone;
 import co.bskim.confluence.codequality.ao.CqCommit;
 import co.bskim.confluence.codequality.ao.CqRepo;
 import co.bskim.confluence.codequality.ao.CqRun;
+import co.bskim.confluence.codequality.git.RemoteUrl;
 import co.bskim.confluence.codequality.git.RepoAuth;
 import co.bskim.confluence.codequality.model.RepoSnapshot;
 import com.atlassian.activeobjects.external.ActiveObjects;
@@ -93,15 +94,19 @@ public class RepositoryService
         {
             return null;
         }
-        return new RepoSnapshot(row.getID(), row.getName(), row.getUrl(), row.getBranch(),
-                row.getAuthType(), row.getAuthUser(), row.getAuthSecret(), row.getExcludes(),
+        // Stripped here as well as on save, so a row written before validation existed cannot
+        // hand a token to the REST list or the report page.
+        return new RepoSnapshot(row.getID(), row.getName(),
+                RemoteUrl.sanitiseForDisplay(row.getUrl()), row.getBranch(),
+                row.getAuthType(), row.getAuthUser(), row.getAuthSecret(),
+                row.getSpaceKeys(), row.getExcludes(),
                 row.getThresholds(), row.getLastSyncedAt(), row.getStatus(),
                 row.getStatusMessage());
     }
 
     public RepoSnapshot create(final String name, final String url, final String branch,
-                         final String authUser, final String token, final String excludes,
-                         final String thresholds, final String createdBy)
+                         final String authUser, final String token, final String spaceKeys,
+                         final String excludes, final String thresholds, final String createdBy)
     {
         return transactions.execute(() ->
         {
@@ -112,6 +117,7 @@ public class RepositoryService
             repo.setAuthUser(authUser);
             repo.setAuthType(token == null || token.isEmpty() ? "NONE" : "PAT");
             repo.setAuthSecret(cipher.encrypt(token));
+            repo.setSpaceKeys(spaceKeys);
             repo.setExcludes(excludes);
             repo.setThresholds(thresholds);
             repo.setStatus(STATUS_NEW);
@@ -124,8 +130,9 @@ public class RepositoryService
     }
 
     /** A null {@code token} leaves the stored one alone; an empty string clears it. */
-    public RepoSnapshot update(final int id, final String name, final String url, final String branch,
-                         final String authUser, final String token, final String excludes,
+    public RepoSnapshot update(final int id, final String name, final String url,
+                         final String branch, final String authUser, final String token,
+                         final String spaceKeys, final String excludes,
                          final String thresholds)
     {
         return transactions.execute(() ->
@@ -140,6 +147,7 @@ public class RepositoryService
             repo.setUrl(url);
             repo.setBranch(branch);
             repo.setAuthUser(authUser);
+            repo.setSpaceKeys(spaceKeys);
             repo.setExcludes(excludes);
             repo.setThresholds(thresholds);
             if (token != null)

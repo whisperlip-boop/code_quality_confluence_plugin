@@ -5,31 +5,55 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 
 /**
- * Produces the two UPM icons from the 512x512 source artwork.
+ * Rasterises the 512x512 source artwork down to the sizes the plugin actually serves.
  *
- * UPM serves these as image/png and ignores an SVG, so both sizes are rasterised here rather
- * than referenced directly. Regenerate whenever images/code-quality.png changes:
+ * UPM and the macro browser want PNGs and ignore an SVG, and the row-action icons are used as
+ * CSS masks at 18px - shipping the 512px originals for those would be 50KB of download for
+ * four glyphs. Regenerate whenever the sources change:
  *
  *   javac -d /tmp/cq-icons tools/MakeIcons.java
  *   java -cp /tmp/cq-icons MakeIcons src/main/resources/images
  */
 public final class MakeIcons
 {
+    /** source name, output name, size. */
+    private static final String[][] OUTPUTS = {
+            { "code-quality", "pluginIcon", "72" },
+            { "code-quality", "pluginLogo", "144" },
+            // The macro browser renders its icon at 80px.
+            { "code-quality", "macroIcon", "80" },
+            // Row actions are masked at 18px; 36 covers a 2x display.
+            { "analyze", "analyze-icon", "36" },
+            { "report", "report-icon", "36" },
+            { "edit", "edit-icon", "36" },
+            { "delete", "delete-icon", "36" },
+    };
+
     public static void main(String[] args) throws Exception
     {
         File dir = new File(args[0]);
-        BufferedImage source = ImageIO.read(new File(dir, "code-quality.png"));
-        if (source == null)
+        for (String[] output : OUTPUTS)
         {
-            throw new IllegalStateException("Cannot read " + new File(dir, "code-quality.png"));
+            File source = new File(dir, output[0] + ".png");
+            if (!source.isFile())
+            {
+                System.out.println("skip " + source.getName() + " (missing)");
+                continue;
+            }
+            BufferedImage image = ImageIO.read(source);
+            if (image == null)
+            {
+                System.out.println("skip " + source.getName() + " (unreadable)");
+                continue;
+            }
+            int size = Integer.parseInt(output[2]);
+            ImageIO.write(scale(image, size), "png", new File(dir, output[1] + ".png"));
+            System.out.println("wrote " + output[1] + ".png (" + size + ")");
         }
-        ImageIO.write(scale(source, 72), "png", new File(dir, "pluginIcon.png"));
-        ImageIO.write(scale(source, 144), "png", new File(dir, "pluginLogo.png"));
-        System.out.println("wrote pluginIcon.png (72) and pluginLogo.png (144) to " + dir);
     }
 
     /**
-     * Halves repeatedly before the final step. A single one-shot draw from 512 to 72 aliases
+     * Halves repeatedly before the final step. A single one-shot draw from 512 to 36 aliases
      * badly with bilinear filtering, and stepwise reduction is the cheap fix.
      */
     private static BufferedImage scale(BufferedImage source, int target)

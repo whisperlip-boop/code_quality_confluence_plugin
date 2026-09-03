@@ -141,6 +141,29 @@ Everything runs inside Confluence - no worker, no external database, no Node run
 - The duplicate detector and the error/connectivity scanners are Java reimplementations of what
   the proof of concept did with jscpd and tree-sitter, which a JVM plugin cannot load.
 
+## Access
+
+Registering, editing and analysing require Confluence administrator rights - it hands the
+instance a credential and asks it to clone from the internet.
+
+Reading is scoped by space. A repository links to one or more spaces and is visible to whoever
+can view any of them, which reuses the permissions the instance already has rather than
+inventing a second model: a personal repository goes in a personal space, a team's in the
+team's. **A repository with no spaces linked is visible to administrators only** - these reports
+carry a private codebase's file paths, commit subjects and author addresses, and the safe
+reading of "not configured yet" is "not shared". Not-found and not-permitted answer alike, so
+repository ids cannot be enumerated.
+
+Access tokens are stored with AES-256-GCM under a key kept in a `0600` file in the Confluence
+**shared** home - not in the database, and shared across a Data Center cluster so a failover can
+still read them. Credentials pasted into the clone URL itself are moved into that field and
+stripped from the URL. What this does not protect against is anyone who can read the Confluence
+home, run code in the JVM, or install a plugin; Confluence Server has no secret store that hides
+a key from its own administrators. Register a read-only, repository-scoped token.
+
+Only `https://` and `ssh://` clone URLs are accepted. `file://` would read the server's own
+disk, and an unchecked scheme reached the browser as a link.
+
 ## Usage
 
 1. Install the jar through **Manage apps**.
@@ -177,6 +200,24 @@ python3 tools/make-i18n.py   # regenerate the .properties files after editing th
 `src/main/resources/code-quality*.properties` are generated: Confluence reads plugin properties
 as ISO-8859-1, so Korean has to be `\uXXXX` escaped. Edit `tools/make-i18n.py`, never the
 `.properties` files.
+
+## Tests
+
+```bash
+atlas-mvn test
+```
+
+Nine of them, and they exist because the numbers are the product. Six pin the copy-paste
+classifier: scattered language idioms must not count as copying (the case that made the first
+version report 13.7%), a block copied across files, a move within a file, a move across files, a
+copy whose source survived, and **classification independent of the order files entered the
+index**. That last one failed before the index cap was removed and passes after, which is the
+only real evidence the fix worked.
+
+Three build a repository with JGit and controlled commit dates: the 14-day censoring boundary,
+churn attributed back to the commit that added the line, and a full-versus-incremental run
+compared field for field - `sampled()` included, because a run that samples different commits
+picks a different trend reference and reports a different delta with no change to the code.
 
 ## Verification tools
 

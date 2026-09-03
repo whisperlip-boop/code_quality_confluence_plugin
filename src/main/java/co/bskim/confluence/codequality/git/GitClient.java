@@ -9,12 +9,15 @@ import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
 import org.eclipse.jgit.transport.CredentialsProvider;
 import org.eclipse.jgit.transport.RefSpec;
 import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
 import javax.inject.Named;
 import java.io.File;
 import java.io.IOException;
 import java.util.Collections;
+import java.util.Locale;
 
 /**
  * Bare mirrors of the registered remotes, kept under the Confluence home directory.
@@ -26,6 +29,8 @@ import java.util.Collections;
 @Named
 public class GitClient
 {
+    private static final Logger log = LoggerFactory.getLogger(GitClient.class);
+
     private static final int TIMEOUT_SECONDS = 180;
     private static final int LS_REMOTE_TIMEOUT_SECONDS = 30;
 
@@ -103,6 +108,11 @@ public class GitClient
         /** Credentials were required and they worked. */
         public boolean tokenVerified;
         public int branches;
+        /**
+         * A category, not a message. Returning JGit's own text told a caller whether a port was
+         * open, which turned this endpoint into a port scanner; the detail goes to the log
+         * instead.
+         */
         public String error = "";
     }
 
@@ -129,7 +139,7 @@ public class GitClient
         }
         catch (Exception e)
         {
-            anonymousError = describe(e);
+            anonymousError = describe(url, e);
         }
 
         if (auth == null || auth.isEmpty())
@@ -146,7 +156,7 @@ public class GitClient
         }
         catch (Exception e)
         {
-            result.error = describe(e);
+            result.error = describe(url, e);
         }
         return result;
     }
@@ -163,14 +173,41 @@ public class GitClient
                 .size();
     }
 
-    private static String describe(Exception e)
+    /**
+     * Reduces a failure to one of a handful of categories.
+     *
+     * <p>The full text is logged, never returned. A remote's exact error distinguishes an open
+     * port from a closed one, a present repository from an absent one, and that difference is
+     * exactly what makes an unauthenticated reachability probe useful to somebody mapping an
+     * internal network.</p>
+     */
+    private static String describe(String url, Exception e)
     {
-        String message = e.getMessage();
-        if (message == null || message.isEmpty())
+        log.debug("Repository probe failed for {}", url, e);
+        String text = (e.getMessage() == null ? "" : e.getMessage()).toLowerCase(Locale.ROOT);
+        String type = e.getClass().getName().toLowerCase(Locale.ROOT);
+
+        if (text.contains("not authorized") || text.contains("authentication is required")
+                || text.contains("authentication failed") || text.contains("401")
+                || text.contains("403"))
         {
-            message = e.getClass().getSimpleName();
+            return "notAuthorized";
         }
-        return message.length() > 300 ? message.substring(0, 300) : message;
+        if (text.contains("not a git repository")
+                || text.contains("does not appear to be a git repository"))
+        {
+            return "notGitRepository";
+        }
+        if (text.contains("not found") || text.contains("404"))
+        {
+            return "notFound";
+        }
+        if (type.contains("sockettimeout") || text.contains("timed out")
+                || text.contains("timeout"))
+        {
+            return "timeout";
+        }
+        return "unreachable";
     }
 
     public void discard(int repoId)
