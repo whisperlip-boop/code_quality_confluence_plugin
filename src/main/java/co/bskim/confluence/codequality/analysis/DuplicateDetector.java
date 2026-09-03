@@ -43,6 +43,16 @@ public final class DuplicateDetector
         public final List<CloneHit> hits = new ArrayList<CloneHit>();
         /** Duplicated lines per file, for the "one file holds most of the clones" finding. */
         public final Map<String, Integer> byFile = new HashMap<String, Integer>();
+        /** Subtrees left out as copies of other subtrees, for the report to declare. */
+        public final List<MirrorTrees.Mirror> mirrors = new ArrayList<MirrorTrees.Mirror>();
+        /**
+         * Code lines actually measured - the tree's lines less any mirror subtree.
+         *
+         * <p>The ratio has to use this as its denominator. Taking mirror lines out of the
+         * numerator while leaving them in the denominator halves the answer, which is a
+         * different wrong number rather than a fix.</p>
+         */
+        public int measuredLines;
     }
 
     private DuplicateDetector()
@@ -51,8 +61,26 @@ public final class DuplicateDetector
 
     public static Result detect(TreeState state)
     {
+        return detect(state, MirrorTrees.detect(state));
+    }
+
+    /**
+     * @param mirrors subtrees to leave out because they are copies of other subtrees - see
+     *                {@link MirrorTrees}. The result carries them so the report can say so.
+     */
+    public static Result detect(TreeState state, MirrorTrees.Result mirrors)
+    {
         Result result = new Result();
-        List<String> paths = state.sortedPaths();
+        result.mirrors.addAll(mirrors.mirrors);
+        List<String> paths = new ArrayList<String>();
+        for (String path : state.sortedPaths())
+        {
+            if (!mirrors.excluded.contains(path))
+            {
+                paths.add(path);
+                result.measuredLines += state.get(path).code.size();
+            }
+        }
 
         List<List<String>> norms = new ArrayList<List<String>>(paths.size());
         List<boolean[]> covered = new ArrayList<boolean[]>(paths.size());

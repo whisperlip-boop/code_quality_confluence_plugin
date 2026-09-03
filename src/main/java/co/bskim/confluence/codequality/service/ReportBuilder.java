@@ -4,6 +4,7 @@ import co.bskim.confluence.codequality.analysis.AnalysisConfig;
 import co.bskim.confluence.codequality.analysis.AnalysisEngine;
 import co.bskim.confluence.codequality.analysis.CommitStats;
 import co.bskim.confluence.codequality.analysis.DuplicateDetector;
+import co.bskim.confluence.codequality.analysis.MirrorTrees;
 import co.bskim.confluence.codequality.analysis.Thresholds;
 import co.bskim.confluence.codequality.model.Author;
 import com.google.gson.Gson;
@@ -153,6 +154,8 @@ public final class ReportBuilder
         double dupDeltaPct;
         int dupDeltaLines;
         int dupLinesThen;
+        /** Denominator of the duplication ratio: HEAD's code lines less any mirror subtree. */
+        int dupMeasuredLoc;
         int windowDays;
         /**
          * Days between the reference commit and HEAD, which is not the window when there was
@@ -242,7 +245,12 @@ public final class ReportBuilder
 
         a.dupLines = outcome.headDupLines;
         a.dupClones = outcome.headDupClones;
-        a.dupPct = outcome.headLoc == 0 ? 0 : 100.0 * outcome.headDupLines / outcome.headLoc;
+        // Measured lines, not total: a mirror subtree is out of the numerator, so leaving it
+        // in the denominator would halve the answer rather than correct it.
+        a.dupMeasuredLoc = outcome.headDupMeasuredLines > 0
+                ? outcome.headDupMeasuredLines : outcome.headLoc;
+        a.dupPct = a.dupMeasuredLoc == 0 ? 0
+                : 100.0 * outcome.headDupLines / a.dupMeasuredLoc;
 
         double kloc = outcome.headLoc / 1000.0;
         int handlers = outcome.headBare + outcome.headBroad + outcome.headSwallow
@@ -361,7 +369,9 @@ public final class ReportBuilder
         {
             return;
         }
-        a.legacyDupDelta = change(ratio(reference.dupLines, reference.loc) * 100, a.dupPct);
+        a.legacyDupDelta = change(ratio(reference.dupLines,
+                reference.dupMeasuredLines > 0 ? reference.dupMeasuredLines : reference.loc)
+                * 100, a.dupPct);
         a.legacyComplexityDelta = change(
                 complexity(reference.decisions, reference.functions), a.legacyComplexity);
         a.legacyCommentDelta = change(
@@ -488,6 +498,7 @@ public final class ReportBuilder
                 pair("language", a.dominantLanguage),
                 pair("basis", a.dupBand == null ? "" : a.dupBand.basis),
                 pair("cohortSize", a.dupBand == null ? 0 : a.dupBand.cohortSize),
+                pair("critCohortSize", a.dupBand == null ? 0 : a.dupBand.critCohortSize),
                 pair("levelWarn", a.dupBand == null ? 0 : a.dupBand.warn),
                 pair("levelCrit", a.dupBand == null ? 0 : a.dupBand.crit),
                 pair("floorLines", t.dupDeltaFloorLines));
@@ -726,8 +737,11 @@ public final class ReportBuilder
                 point.put("loc", row.loc);
                 point.put("files", row.files);
                 point.put("dupLines", row.dupLines);
-                point.put("dupPct", row.loc == 0 ? 0
-                        : round(100.0 * row.dupLines / row.loc, 3));
+                // Same denominator as the headline ratio, or the trend line and the tile
+                // would disagree on a repository with a mirror subtree.
+                int dupBase = row.dupMeasuredLines > 0 ? row.dupMeasuredLines : row.loc;
+                point.put("dupPct", dupBase == 0 ? 0
+                        : round(100.0 * row.dupLines / dupBase, 3));
                 point.put("dupClones", row.dupClones);
                 point.put("errDensity", row.loc == 0 ? 0
                         : round(row.errSwallow / (row.loc / 1000.0), 3));
@@ -981,6 +995,29 @@ public final class ReportBuilder
                                                      AnalysisEngine.Outcome outcome)
     {
         List<Map<String, Object>> caveats = new ArrayList<Map<String, Object>>();
+
+        // First, because it changes the duplication denominator - a reader who meets it after
+        // the numbers has already read them as covering the whole repository.
+        if (!outcome.headMirrors.isEmpty())
+        {
+            int droppedLines = 0;
+            StringBuilder names = new StringBuilder();
+            for (MirrorTrees.Mirror mirror : outcome.headMirrors)
+            {
+                droppedLines += mirror.droppedLines;
+                if (names.length() > 0)
+                {
+                    names.append(", ");
+                }
+                names.append(mirror.mirror).append(" (= ").append(mirror.original).append(')');
+            }
+            Map<String, Object> mirrors = new LinkedHashMap<String, Object>();
+            mirrors.put("trees", outcome.headMirrors.size());
+            mirrors.put("lines", droppedLines);
+            mirrors.put("names", names.toString());
+            mirrors.put("measured", outcome.headDupMeasuredLines);
+            caveats.add(caveat("mirrorTrees", mirrors));
+        }
 
         Map<String, Object> censoring = new LinkedHashMap<String, Object>();
         censoring.put("commits", a.censoredCommits);

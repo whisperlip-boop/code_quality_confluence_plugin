@@ -60,28 +60,67 @@ public final class Thresholds
     {
         public double warn;
         public double crit;
+        /** Repositories behind the warn band: this language's cohort. */
         public int cohortSize;
+        /** Repositories behind the act band, which is pooled across languages - see below. */
+        public int critCohortSize;
         public String basis = "";
 
         public LevelBand()
         {
         }
 
-        LevelBand(double warn, double crit, int cohortSize, String basis)
+        LevelBand(double warn, double crit, int cohortSize, int critCohortSize, String basis)
         {
             this.warn = warn;
             this.crit = crit;
             this.cohortSize = cohortSize;
+            this.critCohortSize = critCohortSize;
             this.basis = basis;
         }
     }
 
+    /**
+     * Where the duplication bands come from, measured 2026-09-03.
+     *
+     * <p>Warn is this language's own 75th percentile. Act is the <b>pooled</b> 90th percentile
+     * across all three cohorts, and that is a deliberate choice rather than a shortcut: a
+     * per-language p90 moves by up to 2.9 points when any single repository is dropped from a
+     * cohort of thirty-odd, while the pooled one moves by 0.26. Publishing an "act now" line
+     * that one repository can shift by three points would be exactly the guessing this band
+     * exists to replace. Pooling is defensible because the three distributions sit on top of
+     * each other - medians 2.96 / 2.37 / 2.62 - so the tail is measuring the detector and the
+     * kind of code people write, not the language.</p>
+     *
+     * <table>
+     *   <tr><th>language</th><th>n</th><th>p25</th><th>median</th><th>p75</th><th>p90</th>
+     *       <th>p90 leave-one-out</th></tr>
+     *   <tr><td>Java</td><td>41</td><td>1.62</td><td>2.96</td><td>6.04</td><td>11.01</td>
+     *       <td>0.49</td></tr>
+     *   <tr><td>JS/TS</td><td>33</td><td>1.31</td><td>2.37</td><td>4.53</td><td>13.05</td>
+     *       <td>2.87</td></tr>
+     *   <tr><td>Python</td><td>38</td><td>1.59</td><td>2.62</td><td>5.46</td><td>11.69</td>
+     *       <td>2.39</td></tr>
+     *   <tr><td>pooled</td><td>112</td><td></td><td>2.56</td><td>5.63</td><td>11.27</td>
+     *       <td>0.26</td></tr>
+     * </table>
+     *
+     * <p>Raw measurements are in {@code tools/cohort-*-2026-09-03.tsv}, with every excluded
+     * repository and the reason. Regenerate with {@code tools/clone-cohort.sh},
+     * {@code tools/CohortProbe.java} and {@code tools/cohort-stats.py}.</p>
+     */
     private static Map<String, LevelBand> defaultDupBands()
     {
         Map<String, LevelBand> bands = new LinkedHashMap<String, LevelBand>();
-        bands.put("PYTHON", new LevelBand(5.3, 8.7, 19, "python-cohort-2026-09-02"));
+        bands.put("JAVA", new LevelBand(6.0, POOLED_CRIT, 41, POOLED_N, BASIS));
+        bands.put("JAVASCRIPT", new LevelBand(4.5, POOLED_CRIT, 33, POOLED_N, BASIS));
+        bands.put("PYTHON", new LevelBand(5.5, POOLED_CRIT, 38, POOLED_N, BASIS));
         return bands;
     }
+
+    private static final double POOLED_CRIT = 11.3;
+    private static final int POOLED_N = 112;
+    private static final String BASIS = "cohort-2026-09-03";
 
     /** The band for a dominant language, or null when that language has no cohort. */
     public LevelBand bandFor(String language)

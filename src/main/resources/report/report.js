@@ -509,7 +509,8 @@
             ]);
             note.textContent = (detail.levelApplicable
                 ? t('label.levelBasis', [detail.levelWarn, detail.levelCrit,
-                    detail.cohortSize, languageName(detail.language)])
+                    detail.cohortSize, languageName(detail.language),
+                    detail.critCohortSize])
                 : t('label.noBasisNote', [languageName(detail.language)]))
                 + ' ' + t('label.floorNote', [detail.floorLines])
                 + ' ' + t('kpi.duplication.note');

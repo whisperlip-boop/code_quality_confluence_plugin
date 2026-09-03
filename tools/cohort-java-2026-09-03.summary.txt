@@ -1,0 +1,9 @@
+== java: n=41
+   dropped square_moshi                     Kotlin project: 2 Java lines
+   dropped square_okhttp                    Kotlin project: 129 Java lines
+   mirror  google_guava                     android/guava~=guava(93789 lines)
+   min 0.00  p25 1.62  median 2.96  p75 6.04  p80 6.99  p85 7.97  p90 11.01  max 15.44
+   right tail: alibaba_fastjson2 15.4%, ReactiveX_RxJava 15.0%, javaparser_javaparser 11.5%, apache_commons-text 11.3%, square_retrofit 11.0%, apache_maven 10.5%
+   p75 6.04  leave-one-out worst shift +0.22 (LMAX-Exchange_disruptor)
+   p85 7.97  leave-one-out worst shift +0.37 (FasterXML_jackson-databind)
+   p90 11.01  leave-one-out worst shift +0.49 (ReactiveX_RxJava)

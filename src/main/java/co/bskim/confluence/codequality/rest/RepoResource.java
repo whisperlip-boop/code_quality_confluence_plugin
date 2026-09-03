@@ -31,6 +31,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /** REST surface behind the repository table and the analyse/report actions. */
 @Named
@@ -64,13 +65,15 @@ public class RepoResource
             return error(Response.Status.UNAUTHORIZED, "Login required");
         }
         List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
+        // One query for the whole column rather than one per row - see repoIdsWithReports.
+        Set<Integer> withReports = repositories.repoIdsWithReports();
         for (RepoSnapshot repo : repositories.all())
         {
             // Space-scoped: a row the caller cannot view is not listed at all, so probing
             // sequential ids reveals nothing either.
             if (access.canView(repo))
             {
-                rows.add(toDto(repo));
+                rows.add(toDto(repo, withReports.contains(repo.id)));
             }
         }
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
@@ -335,6 +338,11 @@ public class RepoResource
 
     private Map<String, Object> toDto(RepoSnapshot repo)
     {
+        return toDto(repo, repositories.hasReport(repo.id));
+    }
+
+    private Map<String, Object> toDto(RepoSnapshot repo, boolean hasReport)
+    {
         Map<String, Object> dto = new LinkedHashMap<String, Object>();
         dto.put("id", repo.id);
         dto.put("name", repo.name);
@@ -349,7 +357,7 @@ public class RepoResource
         dto.put("status", repo.status);
         dto.put("statusMessage", repo.statusMessage);
         dto.put("lastSyncedAt", repo.lastSyncedAt);
-        dto.put("hasReport", repositories.hasReport(repo.id));
+        dto.put("hasReport", hasReport);
         return dto;
     }
 

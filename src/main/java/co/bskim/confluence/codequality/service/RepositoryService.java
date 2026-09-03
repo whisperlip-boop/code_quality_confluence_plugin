@@ -420,6 +420,30 @@ public class RepositoryService
         });
     }
 
+    /**
+     * Which repositories have a stored report, in one transaction.
+     *
+     * <p>The list endpoint used to ask {@link #hasReport} per row, and the macro polls every
+     * two seconds - forty repositories on one dashboard is twenty transactions a second doing
+     * nothing but repeating the same table scan.</p>
+     */
+    public Set<Integer> repoIdsWithReports()
+    {
+        return transactions.execute(() ->
+        {
+            Set<Integer> withReports = new HashSet<Integer>();
+            for (CqRun run : ao.find(CqRun.class, Query.select().where("STATUS = ?", "OK")))
+            {
+                String json = run.getReportJson();
+                if (json != null && !json.isEmpty())
+                {
+                    withReports.add(run.getRepoId());
+                }
+            }
+            return withReports;
+        });
+    }
+
     public boolean hasReport(final int repoId)
     {
         return transactions.execute(() ->

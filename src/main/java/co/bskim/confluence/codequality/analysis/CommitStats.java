@@ -28,6 +28,8 @@ public final class CommitStats
     public int files = -1;
     public int dupLines = -1;
     public int dupClones = -1;
+    /** Lines the duplication ratio was measured over: this tree less any mirror subtree. */
+    public int dupMeasuredLines = -1;
     public int errSwallow = -1;
     public int calls = -1;
     /** Legacy-metric inputs, sampled alongside the rest; -1 when not sampled. */

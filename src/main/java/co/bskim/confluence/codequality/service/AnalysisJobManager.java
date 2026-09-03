@@ -70,18 +70,31 @@ public class AnalysisJobManager implements DisposableBean
         });
     }
 
-    /** @return false when a run for this repository is already queued or in flight */
+    /**
+     * @return false when a run for this repository is already queued or in flight
+     *
+     * <p>The claim is one atomic map operation. It used to be get, decide, put: a double click
+     * or a race with the two-second poller queued the same repository twice, and then the
+     * second job's fresh {@code JobState} replaced the running one's, so progress reported
+     * QUEUED at 0% for the whole of the first run.</p>
+     */
     public boolean submit(final int repoId)
     {
-        JobState existing = jobs.get(repoId);
-        if (existing != null && (RepositoryService.STATUS_QUEUED.equals(existing.status)
-                || RepositoryService.STATUS_RUNNING.equals(existing.status)))
+        final JobState state = new JobState();
+        JobState claimed = jobs.compute(repoId, (key, existing) ->
+        {
+            if (existing != null && (RepositoryService.STATUS_QUEUED.equals(existing.status)
+                    || RepositoryService.STATUS_RUNNING.equals(existing.status)))
+            {
+                return existing;
+            }
+            return state;
+        });
+        if (claimed != state)
         {
             return false;
         }
 
-        final JobState state = new JobState();
-        jobs.put(repoId, state);
         repositories.markStatus(repoId, RepositoryService.STATUS_QUEUED, "");
 
         executor.submit(() ->

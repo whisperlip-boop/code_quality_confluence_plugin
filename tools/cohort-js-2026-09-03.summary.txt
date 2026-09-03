@@ -1,0 +1,11 @@
+== js: n=33
+   dropped chalk_chalk                      under 1000 measured lines (382)
+   dropped d3_d3                            bundle package that re-exports submodules: 93 lines
+   dropped gulpjs_gulp                      under 1000 measured lines (57)
+   dropped koajs_koa                        under 1000 measured lines (910)
+   dropped moment_moment                    ships its build output at the repository root - moment.js and locale/ are the compiled form of src/ - so the ratio measures its release process. No general exclude pattern can catch output at the root, and loosening the mirror thresholds enough to match a UMD wrapper would start swallowing real modules.
+   min 0.14  p25 1.31  median 2.37  p75 4.53  p80 4.89  p85 8.32  p90 13.05  max 17.91
+   right tail: TanStack_query 17.9%, typeorm_typeorm 17.2%, apollographql_apollo-client 17.1%, remix-run_react-router 13.7%, date-fns_date-fns 10.4%, socketio_socket.io 7.8%
+   p75 4.53  leave-one-out worst shift +0.20 (TanStack_query)
+   p85 8.32  leave-one-out worst shift +2.30 (TanStack_query)
+   p90 13.05  leave-one-out worst shift +2.87 (TanStack_query)

@@ -55,7 +55,7 @@ administrators see them.** Link a space to give a team access.
   commit whose cached row has no statics.
 - `STATIC_SAMPLE_TARGET` said 40 while the call site used 40x5; it is 200 and used directly.
 
-### A-3 — tests exist now (26, all green)
+### A-3 — tests exist now (32, all green)
 
 `CopyPasteClassifierTest` (6): scattered idioms are not copies (the case that made v1 report
 13.7%), a six-line block copied across files, a move within a file, a move across files, a copy
@@ -223,29 +223,75 @@ after the line was added rather than between the addition and the rewrite.
 
 `tools/IncrementalProbe.java` is **deleted** rather than fixed, as the review asked.
 
+### Duplication thresholds - measured for all three languages
+
+Blocked on two things, and a review round added a third. All resolved by measurement.
+
+**Guava's 55.9% was its layout, and the fix is a general rule.** It ships `guava` and
+`android/guava`: 602 files at the same relative paths, 164 of 199 sampled pairs byte-identical.
+Rather than special-case it, `MirrorTrees` now finds subtrees that are copies of other subtrees
+- shared relative paths above a floor, a path-overlap share, and a content check on a sample -
+and leaves the smaller side out of the *static duplication measurement only*. Guava drops from
+55.90% to 4.81%, and the clones that remain are the ones that should:
+`ForwardingBlockingDeque` in two packages, `LocalCache` against `MapMakerInternalMap`,
+`CompactHashMap` against `CompactHashSet`, `ImmutableListMultimap` against
+`ImmutableSetMultimap` - primitive and structural specialisation, which is duplication Java
+forces on you.
+
+Three things about that feature are deliberate. It is **declared**: the report carries a caveat
+naming every dropped subtree, its line count and how identical the sample was, placed first
+because it changes the denominator. The **denominator moves with the numerator** - taking mirror
+lines out of one and not the other halves the answer instead of correcting it. And the
+**copy-paste ratio still counts** a line added to both copies, because that is work done twice.
+`MirrorTreesTest` spends four of its six tests on trees that must *not* be called mirrors,
+since a false positive hides exactly what the plugin is for.
+
+**Kotlin contamination was a probe that could not see it.** `square/moshi` measured 2 Java lines
+and a LOC floor dropped it silently. Neither `Language` nor `dominantLanguage()` can help -
+`.kt` is invisible to both - so `CohortProbe` now reports the dominant source *extension* over
+the whole tree. It flagged five repositories: moshi and okhttp (Kotlin), `d3/d3` (a bundle
+package, 93 lines), `dbt-core` (rewritten in Rust, 46 Python files left), and `sveltejs/svelte`,
+which is a false alarm - 45,986 real lines of TypeScript compiler behind a majority of
+`.svelte` test fixtures. Surfacing for a decision is the guard's job; deciding is not.
+
+**A third outlier turned up: `moment` at 50%.** Checked-in build output. `min/locales.js` is
+every locale file concatenated, and after excluding `min/` it was still 48% because `moment.js`
+and `locale/` at the repository root are the compiled form of `src/`. Mirror detection cannot
+see a copy that is one file rather than a subtree, and no general pattern catches build output
+at the root. `min/`, `benchmark/` (singular - its two plurals were already there, which is how
+Guava's benchmark tree stayed in), `coverage/`, `demo/` and `playground/` were added to the
+exclusions; moment itself is dropped from the cohort with that reason written down. For a user's
+repository in the same shape the answer is the per-repository exclude field.
+
+**fastapi's 25.1% is real** - E-2 answered. Its eight HTTP-verb methods each repeat the same
+380-line `Annotated[..., Doc(...)]` parameter block by hand. The `AnalysisConfig` comment
+claiming the cohort falls to single digits was simply wrong and now says what the data says.
+
+**E-1 closed by pooling, not by hedging.** Leave-one-out is the honest measure of "the p90 rests
+on two points", so it is now computed:
+
+| language | n | p25 | median | p75 (worst shift) | p90 (worst shift) |
+|---|---|---|---|---|---|
+| Java | 41 | 1.62 | 2.96 | **6.04** (0.22) | 11.01 (0.49) |
+| JS/TS | 33 | 1.31 | 2.37 | **4.53** (0.20) | 13.05 (**2.87**) |
+| Python | 38 | 1.59 | 2.62 | **5.46** (0.41) | 11.69 (**2.39**) |
+| pooled | 112 | | 2.56 | 5.63 (0.31) | **11.27** (0.26) |
+
+So warn is this language's p75 - stable to a fifth of a point - and act is the pooled p90 across
+all 112 repositories, because a per-language p90 that one repository can move by three points is
+not a measurement. Pooling is defensible here because the three medians sit within half a point
+of each other. Bands: Java 6.0 / 11.3, JS 4.5 / 11.3, Python 5.5 / 11.3. The report's basis
+sentence states both cohort sizes and why they differ.
+
+The Java-tail prediction from the second review did not hold, incidentally: with mirrors handled,
+Java has the *thinnest* right tail of the three.
+
+Raw data and per-repository exclusions: `tools/cohort-{java,js,py}-2026-09-03.tsv` and the
+matching `.summary.txt`. `ALGO_VERSION` is at 3, because mirror exclusion changes stored numbers.
+
 ## Next, in order
 
-1. **Java and JS thresholds.** Measured but withheld:
-
-   | language | n | p25 | p50 | p75 | p90 |
-   |---|---|---|---|---|---|
-   | Python | 19 | 1.22 | 2.66 | 5.32 | 8.74 |
-   | Java | 18 | 2.11 | 3.67 | 6.41 | 12.20 |
-   | JS/TS | 17 | 0.88 | 2.97 | 4.64 | 11.83 |
-
-   Two things to settle first. `google_guava` measured **55.9%** (114,898 duplicated lines in
-   205k LOC) and needs looking at before it goes into a distribution. And the Java cohort list
-   contains Kotlin projects - `square_moshi` came out at 2 LOC, `square_okhttp` at 129 - which
-   should be replaced rather than silently dropped by the 1000-LOC filter.
-   Raw data: `/tmp/cohort-java.tsv`, `/tmp/cohort-js.tsv` (regenerate with
-   `tools/clone-cohort.sh` plus `tools/CohortProbe.java`).
-2. **E-1 - p90 rests on two points** in all three languages. Consider a more stable statistic for
-   the "act" band, or a larger cohort, and show `n` in the UI.
-3. **E-2 - a comment that disagrees with its data.** `AnalysisConfig` says excluding tests and
-   generated tables brings the cohort into single digits; fastapi is still 25.1% and httpx 14.1%.
-   Both look like real duplication, so the comment should change - but fastapi barely moved when
-   `docs_src` was excluded and is worth a look.
-4. **D-2 to D-6** from the review: operational robustness. Orphans left by deleting during a
+1. **D-2 to D-6** from the review: operational robustness. Orphans left by deleting during a
    run, up to 60 seconds blocking a request thread, the check-then-act race in `submit()`, no
    ceiling on clone size, and an N+1 transaction behind the repository list.
 5. **E-3**: bulk-import detection may over-fire on a young repository. E-4 is closed.

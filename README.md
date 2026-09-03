@@ -102,28 +102,67 @@ versions measures the tooling, not the code.
 
 ## Where the duplication thresholds come from
 
-Not a guess and not a placeholder. 19 public Python repositories over 1,000 LOC - requests,
-flask, click, jinja, werkzeug, tornado, celery, scrapy, sqlalchemy, pydantic, fastapi, httpx,
-black, pytest, attrs, arrow, loguru, gunicorn, rich - cloned shallow and run through this same
-detector with these same exclusions on 2026-09-02:
+Not a guess and not a placeholder. 112 public repositories over 1,000 measured lines, cloned
+shallow and run through this same detector with these same exclusions on 2026-09-03.
 
-| percentile | duplication ratio |
-|---|---|
-| p10 | 0.79% |
-| p25 | 1.22% |
-| p50 | 2.66% |
-| p75 | **5.32%** -> warn |
-| p90 | **8.74%** -> act |
+| language | n | p25 | median | p75 | p90 | p90 if one repo is dropped |
+|---|---|---|---|---|---|---|
+| Java | 41 | 1.62% | 2.96% | **6.04%** | 11.01% | +-0.49 |
+| JS/TS | 33 | 1.31% | 2.37% | **4.53%** | 13.05% | **+-2.87** |
+| Python | 38 | 1.59% | 2.62% | **5.46%** | 11.69% | **+-2.39** |
+| pooled | 112 | | 2.56% | 5.63% | **11.27%** | +-0.26 |
 
-fastapi (25.1%) and httpx (14.1%) stay at the top and belong there: fastapi repeats its whole
-annotated parameter list per HTTP verb, httpx mirrors `Client` and `AsyncClient` method for
-method. Both are real and well known.
+**Warn is this language's p75. Act is the pooled p90 across all three cohorts.** The last column
+is why: a single-language p90 built on thirty-odd repositories moves by up to three points when
+any one of them is dropped, and an "act now" line that fragile is not a measurement. The pooled
+one moves by a quarter of a point. Pooling is defensible because the three distributions sit on
+top of each other - the medians are within half a point - so the tail is telling you about the
+detector and about how people write code, not about the language.
 
-Raw measurements are in `tools/cohort-python-2026-09-02.tsv`; regenerate with
-`tools/clone-cohort.sh` plus `tools/CohortProbe.java`. **Replace this with your own
-repositories' distribution once you have five or more** - and measure a cohort per language,
-because a Python-derived number applied to Java is a guess wearing a measurement's clothes.
-That is why the Java reference repository shows no level grade.
+Bands in use: Java 6.0 / 11.3, JS 4.5 / 11.3, Python 5.5 / 11.3. The report says which cohort
+each half came from.
+
+Three repositories are worth knowing about, because each one is a different kind of answer to
+"why is this number so high":
+
+- **Guava, 55.9%.** Its layout, not its code: it ships `guava` and `android/guava`, 602 files at
+  the same relative paths with 164 of 199 sampled pairs byte-identical. This is now handled by a
+  rule rather than an exception - see mirrored subtrees below - and Guava measures 4.81%.
+- **moment, 50%.** Checked-in build output: `min/locales.js` is every locale file concatenated,
+  and `moment.js` and `locale/` at the repository root are the compiled form of `src/`. `min/`
+  is excluded now, but output at the repository root cannot be caught by a pattern, so moment is
+  dropped from the cohort with that reason recorded in
+  `tools/cohort-js-2026-09-03.summary.txt`. If your repository is in the same shape, use the
+  per-repository exclude field.
+- **fastapi, 25.1%.** Real. Its eight HTTP-verb methods each repeat the same 380-line
+  `Annotated[..., Doc(...)]` parameter block by hand. It stays in the distribution.
+
+Raw measurements and every exclusion with its reason: `tools/cohort-{java,js,py}-2026-09-03.tsv`
+and the matching `.summary.txt`. Regenerate with `tools/clone-cohort.sh`,
+`tools/CohortProbe.java` and `tools/cohort-stats.py`. **Replace these with your own
+repositories' distribution once you have thirty or more** - a measured threshold beats a
+borrowed one, and a borrowed one at least says whose it is.
+
+## Mirrored subtrees
+
+A repository that keeps two copies of the same tree - a second flavour of a library for another
+platform, a vendored dependency, a package cloned per build target - is half a copy of itself,
+and measured whole its duplication ratio describes its directory layout instead of its code.
+
+So a subtree that holds the same relative paths as another subtree, and whose sampled files
+match after normalisation, is left out of the static duplication measurement. Three things about
+that:
+
+- **It is declared.** The report opens its caveats by naming every dropped subtree, its line
+  count and how identical the sample was. Quietly removing half a repository from its own
+  denominator would be worse than reporting 56%.
+- **The denominator moves with the numerator.** Duplication is reported over the lines actually
+  measured. Taking the mirror out of one side only would halve the answer rather than fix it.
+- **The copy-paste ratio still counts it.** A line added to both copies is counted as copied,
+  because that is what it is: work done twice.
+
+Firing wrongly is the failure that matters here, since it hides exactly what this tool is for -
+so four of the six tests in `MirrorTreesTest` are trees that must *not* be called mirrors.
 
 ## Architecture
 
@@ -207,7 +246,7 @@ as ISO-8859-1, so Korean has to be `\uXXXX` escaped. Edit `tools/make-i18n.py`, 
 atlas-mvn test
 ```
 
-Twenty-six of them, and they exist because the numbers are the product. Six pin the copy-paste
+Thirty-two of them, and they exist because the numbers are the product. Six pin the copy-paste
 classifier: scattered language idioms must not count as copying (the case that made the first
 version report 13.7%), a block copied across files, a move within a file, a move across files, a
 copy whose source survived, and **classification independent of the order files entered the
@@ -227,6 +266,8 @@ pinned deliberately, so a later hardening pass cannot quietly close the main use
 Four clone real repositories over the local transport to pin that the clone follows the URL. Two
 of them fail against the unfixed code; the other two guard the opposite mistake, discarding a
 clone that was still good.
+
+Six cover mirrored subtrees, four of them trees that must not be treated as one.
 
 One pins that a mis-dated commit cannot silence churn for the rest of the history, and one that
 a token in the user position of an https URL is a credential rather than a login name - both

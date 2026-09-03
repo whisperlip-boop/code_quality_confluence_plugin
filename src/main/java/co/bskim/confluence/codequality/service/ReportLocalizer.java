@@ -209,6 +209,11 @@ public final class ReportLocalizer
     {
         switch (code)
         {
+            case "mirrorTrees":
+                return new Object[] {
+                        num(p, "trees", language), num(p, "lines", language),
+                        str(p, "names"), num(p, "measured", language)
+                };
             case "rightCensoring":
                 return new Object[] { num(p, "commits", language), num(p, "days", language) };
             case "importExcluded":

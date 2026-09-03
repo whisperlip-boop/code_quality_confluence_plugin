@@ -1,0 +1,8 @@
+== py: n=38
+   dropped dbt-labs_dbt-core                rewritten in Rust: 46 Python files remain
+   dropped kennethreitz_records             under 1000 measured lines (468)
+   min 0.33  p25 1.59  median 2.62  p75 5.46  p80 6.18  p85 7.85  p90 11.69  max 25.08
+   right tail: tiangolo_fastapi 25.1%, encode_uvicorn 16.4%, redis_redis-py 14.6%, encode_httpx 14.1%, pytransitions_transitions 10.7%, streamlit_streamlit 8.4%
+   p75 5.46  leave-one-out worst shift +0.41 (benoitc_gunicorn)
+   p85 7.85  leave-one-out worst shift +0.83 (encode_httpx)
+   p90 11.69  leave-one-out worst shift +2.39 (encode_httpx)

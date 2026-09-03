@@ -7,7 +7,7 @@ public final class AnalysisConfig
      * Stored on every cached row. Trend lines are only comparable within one version, so a
      * bump forces every commit to be recomputed instead of silently mixing two algorithms.
      */
-    public static final int ALGO_VERSION = 2;
+    public static final int ALGO_VERSION = 3;
 
     /** Minimum matching run for a block to count as copied or moved. Three killed the noise. */
     public static final int RUN = 3;
@@ -100,6 +100,13 @@ public final class AnalysisConfig
             "**/dist/**", "**/build/**", "**/target/**", "**/out/**", "**/.venv/**",
             "**/venv/**", "**/site-packages/**", "**/__pycache__/**", "**/generated/**",
             "**/*.min.js", "**/*.bundle.js", "**/*_pb2.py", "**/*.pb.go", "**/migrations/**",
+            // Checked-in build output. moment ships min/locales.js - every locale file
+            // concatenated into one - which on its own put the repository at 50% duplicated:
+            // the ratio was measuring its release process. dist/ and build/ were already here;
+            // min/ was the gap, and mirror detection cannot see this one because the copy is a
+            // single file rather than a subtree.
+            "**/min/**", "**/*-min.js", "**/*.min.mjs", "**/coverage/**", "**/lib-cov/**",
+            "**/.next/**", "**/es/**", "**/umd/**", "**/amd/**",
             // Fixtures and snapshots are duplicated on purpose; counting them makes the
             // duplication ratio a measure of the repository's shape, not its quality.
             "**/fixtures/**", "**/__fixtures__/**", "**/testdata/**", "**/test-data/**",
@@ -107,11 +114,15 @@ public final class AnalysisConfig
             "**/*.g.dart", "**/*.pb.py", "**/*_pb.js", "**/*.designer.cs",
             // Tests, docs and examples are out of scope, and not as a convenience: they are
             // repetitive by design, so leaving them in makes the duplication ratio a measure
-            // of how many tutorial files a project ships. Measured across 20 public Python
-            // repositories, including them put fastapi at 27% (docs_src/tutorial00N.py) and
-            // black at 21% (tests/data). Without them the same cohort lands in single digits,
-            // which is the distribution a threshold can actually be read against. Test quality
-            // is a separate question with its own metrics.
+            // of how many tutorial files a project ships. Including them put fastapi at 27%
+            // (docs_src/tutorial00N.py) and black at 21% (tests/data).
+            //
+            // It does NOT bring the cohort into single digits, which an earlier version of
+            // this comment claimed. Across 38 Python repositories the median is 2.6% and the
+            // 90th percentile 11.7%, and fastapi is still 25.1% - which is real: its eight
+            // HTTP-verb methods repeat the same 380-line Annotated/Doc parameter block by
+            // hand. Excluding tests removes an artefact; it does not remove duplication.
+            // Test quality is a separate question with its own metrics.
             "**/test/**", "**/tests/**", "**/testing/**", "**/spec/**", "**/specs/**",
             "**/test_*.py", "**/*_test.py", "**/*_tests.py", "**/conftest.py",
             "**/*Test.java", "**/*Tests.java", "**/*IT.java", "**/*ITCase.java",
@@ -119,7 +130,10 @@ public final class AnalysisConfig
             "**/*.spec.js", "**/*.spec.ts", "**/*.spec.jsx", "**/*.spec.tsx",
             "**/examples/**", "**/example/**", "**/samples/**", "**/sample/**",
             "**/docs/**", "**/doc/**", "**/docs_src/**", "**/benchmarks/**", "**/bench/**",
-            "**/profiling/**", "**/profile/**"
+            // benchmark singular was missing while its two plurals were here, which is how
+            // Guava's guava-tests/benchmark tree stayed in the measurement.
+            "**/benchmark/**", "**/profiling/**", "**/profile/**",
+            "**/demo/**", "**/demos/**", "**/playground/**", "**/playgrounds/**"
     };
 
     private AnalysisConfig()

@@ -32,8 +32,8 @@ public class ReportLocalizerTest
             "busFactor", "busFactorClean", "churnSpike", "identitySuspects", "copyPasteHigh");
 
     private static final List<String> CAVEAT_CODES = Arrays.asList(
-            "rightCensoring", "importExcluded", "sampleSize", "approximation", "aiAttribution",
-            "firstParent");
+            "mirrorTrees", "rightCensoring", "importExcluded", "sampleSize", "approximation",
+            "aiAttribution", "firstParent");
 
     private static final Pattern PLACEHOLDER = Pattern.compile("\\{\\d+\\}");
 
@@ -176,6 +176,9 @@ public class ReportLocalizerTest
         params.addProperty("refactorPct", 19.7);
         params.addProperty("commits", 27);
         params.addProperty("days", 14);
+        params.addProperty("trees", 2);
+        params.addProperty("names", "android/guava (= guava)");
+        params.addProperty("measured", 105621);
 
         JsonObject entry = new JsonObject();
         entry.addProperty("code", code);

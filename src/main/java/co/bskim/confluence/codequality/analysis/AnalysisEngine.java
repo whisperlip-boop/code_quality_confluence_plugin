@@ -71,6 +71,10 @@ public final class AnalysisEngine
         public int headFiles;
         public int headDupLines;
         public int headDupClones;
+        /** Lines the duplication ratio was measured over: HEAD less any mirror subtree. */
+        public int headDupMeasuredLines;
+        /** Subtrees left out of the duplication measurement as copies of other subtrees. */
+        public List<MirrorTrees.Mirror> headMirrors = new ArrayList<MirrorTrees.Mirror>();
         public int headBare;
         public int headBroad;
         public int headSwallow;
@@ -392,6 +396,7 @@ public final class AnalysisEngine
         row.files = state.fileCount();
         row.dupLines = duplicates.duplicatedLines;
         row.dupClones = duplicates.cloneCount;
+        row.dupMeasuredLines = duplicates.measuredLines;
         row.errSwallow = patterns.handlers();
         row.calls = patterns.calls;
         row.commentLines = state.commentLineCount();
@@ -409,6 +414,8 @@ public final class AnalysisEngine
         outcome.headFiles = state.fileCount();
         outcome.headDupLines = duplicates.duplicatedLines;
         outcome.headDupClones = duplicates.cloneCount;
+        outcome.headDupMeasuredLines = duplicates.measuredLines;
+        outcome.headMirrors = duplicates.mirrors;
         outcome.headClones = duplicates.hits;
         outcome.headDupByFile = duplicates.byFile;
         outcome.headBare = patterns.bare;
@@ -439,6 +446,7 @@ public final class AnalysisEngine
                 last.files = outcome.headFiles;
                 last.dupLines = outcome.headDupLines;
                 last.dupClones = outcome.headDupClones;
+                last.dupMeasuredLines = outcome.headDupMeasuredLines;
                 last.errSwallow = patterns.handlers();
                 last.calls = outcome.headCalls;
                 last.commentLines = outcome.headCommentLines;

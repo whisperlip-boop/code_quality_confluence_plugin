@@ -276,9 +276,14 @@ MESSAGES = [
     ("cq.label.direction", "Direction", "방향"),
     ("cq.label.noBasis", "No baseline set", "기준 미설정"),
     ("cq.label.levelBasis",
-     "Warn at {0}%, act at {1}% - the 75th and 90th percentiles of {2} public {3} "
-     "repositories measured with these same settings.",
-     "주의 {0}%, 경고 {1}% — 같은 설정으로 측정한 공개 {3} 레포지터리 {2}개 분포의 p75와 p90."),
+     "Warn at {0}%: the 75th percentile of {2} public {3} repositories. Act at {1}%: the 90th "
+     "percentile of all {4} repositories measured, pooled across languages because a "
+     "per-language 90th percentile moves by up to 3 points when one repository is dropped, "
+     "and the pooled one by 0.3. Same detector and same exclusions throughout.",
+     "주의 {0}% — 공개 {3} 레포지터리 {2}개 분포의 p75. 경고 {1}% — 측정한 전체 "
+     "{4}개 레포지터리를 언어 구분 없이 합친 분포의 p90이다. 언어별 p90은 레포 하나가 "
+     "빠지면 최대 3%p 움직이고 합친 값은 0.3%p 움직여서 그렇게 했다. 탐지기와 제외 "
+     "규칙은 전 구간 동일하다."),
     ("cq.label.noBasisNote",
      "This repository is mostly {0}, and no cohort has been measured for it. A threshold "
      "borrowed from another language would be a guess. The number stands on its own; the "
@@ -492,6 +497,21 @@ MESSAGES = [
      "이동하는 게 아니라 복제되고 있다."),
 
     # --- caveats --------------------------------------------------------------
+    ("cq.caveat.mirrorTrees.title",
+     "{0} mirrored subtree(s) left out of the duplication measurement",
+     "중복 측정에서 제외한 미러 서브트리 {0}개"),
+    ("cq.caveat.mirrorTrees.body",
+     "{2} - {1} lines held at the same relative paths as another subtree, and matching after "
+     "normalisation. Measured whether the repository keeps a second copy of a library for "
+     "another platform, vendors a dependency, or clones a package per build target: the ratio "
+     "would otherwise be a statement about the layout rather than the code. The ratio is over "
+     "the remaining {3} lines, and the copy-paste ratio still counts a line added to both "
+     "copies, because that is work done twice.",
+     "{2} — 다른 서브트리와 같은 상대경로에 있고 정규화 후 내용이 일치하는 {1}줄이다. 다른 "
+     "플랫폼용 사본, 벤더링된 의존성, 빌드 타깃별 복제 중 무엇이든 같은 형태로 잡힌다. "
+     "그대로 재면 비율이 코드가 아니라 디렉터리 구조에 대한 진술이 된다. 비율은 남은 "
+     "{3}줄 기준이고, 양쪽에 같이 추가한 라인은 복사·붙여넣기 비율에 그대로 남는다 — "
+     "두 번 한 일이기 때문이다."),
     ("cq.caveat.rightCensoring.title", "Right-censoring", "오른쪽 절단(right-censoring)"),
     ("cq.caveat.rightCensoring.body",
      "{0} commit(s) are newer than {1} days, so their churn cannot be measured to the end. "
