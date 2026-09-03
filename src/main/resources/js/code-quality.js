@@ -5,7 +5,7 @@
  * a page that has no AUI, so it cannot depend on AJS being there. Labels arrive with the list
  * response rather than from a client-side bundle, for the same reason.
  */
-(function () {
+(function (global) {
     'use strict';
 
     var STRINGS = {};
@@ -22,6 +22,93 @@
     }
 
     var API = contextPath() + '/rest/code-quality/1.0/repos';
+
+    /**
+     * Does this repository answer to what the macro was told to show?
+     *
+     * The macro's `repository` parameter used to be compared to the stored name exactly, so a
+     * user had to know which of two naming conventions a row happened to carry - names entered
+     * by hand when the form still had a Name field, and `owner/repo` derived from the URL ever
+     * since - and pasting the clone URL, the obvious guess, matched nothing at all.
+     *
+     * Deliberately not a substring match: `api` would answer for both `acme/api` and
+     * `acme-fork/api`, and quietly showing two rows is not what "show only this one" asked for.
+     */
+    function identifies(repo, wanted) {
+        var want = normaliseRef(wanted);
+        if (want === '') {
+            return true;
+        }
+        if (String(repo.id) === want) {
+            return true;
+        }
+        // Both sides are reduced to whatever canonical forms they have, so any URL shape a
+        // person might paste - https, browse, scp-like - lands on the same owner/repo as the
+        // stored one.
+        var wants = [want];
+        var wantedOwnerRepo = ownerAndRepo(wanted);
+        if (wantedOwnerRepo !== '') {
+            wants.push(wantedOwnerRepo);
+            wants.push(wantedOwnerRepo.split('/').pop());
+        }
+
+        var candidates = [normaliseRef(repo.name), normaliseRef(repo.url)];
+        var fromUrl = ownerAndRepo(repo.url);
+        if (fromUrl !== '') {
+            candidates.push(fromUrl);
+            candidates.push(fromUrl.split('/').pop());
+        }
+        var fromName = normaliseRef(repo.name);
+        if (fromName.indexOf('/') >= 0) {
+            candidates.push(fromName.split('/').pop());
+        }
+
+        for (var i = 0; i < candidates.length; i++) {
+            if (candidates[i] === '') {
+                continue;
+            }
+            for (var j = 0; j < wants.length; j++) {
+                if (candidates[i] === wants[j]) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /** Lower-cased, trimmed, without a trailing .git or slash, so pasted URLs compare. */
+    function normaliseRef(value) {
+        var text = String(value === undefined || value === null ? '' : value).trim()
+            .toLowerCase();
+        while (text.charAt(text.length - 1) === '/') {
+            text = text.slice(0, -1);
+        }
+        if (text.slice(-4) === '.git') {
+            text = normaliseRef(text.slice(0, -4));
+        }
+        return text;
+    }
+
+    /** `owner/repo` out of a clone URL, in either the https or the scp-like form. */
+    function ownerAndRepo(url) {
+        var text = normaliseRef(url);
+        if (text === '') {
+            return '';
+        }
+        var afterScheme = text.indexOf('://');
+        if (afterScheme >= 0) {
+            text = text.substring(afterScheme + 3);
+        }
+        var at = text.lastIndexOf('@');
+        if (at >= 0) {
+            text = text.substring(at + 1);
+        }
+        text = text.replace(':', '/');
+        var parts = text.split('/').filter(function (part) {
+            return part !== '';
+        });
+        return parts.length >= 3 ? parts[parts.length - 2] + '/' + parts[parts.length - 1] : '';
+    }
 
     function text(key, args) {
         var value = STRINGS[key];
@@ -179,6 +266,8 @@
         this.only = (root.getAttribute('data-only') || '').trim();
         this.heading = (root.getAttribute('data-title') || '').trim();
         this.repos = [];
+        /** Every name the server offered, before this macro's filter narrowed it. */
+        this.available = [];
         this.editing = null;
         this.pollTimer = null;
     }
@@ -201,8 +290,14 @@
             CAN_MANAGE = !!payload.canManage;
             self.repos = payload.repos || [];
             if (self.only) {
+                // Kept so the empty case can say what it filtered and out of how many, which
+                // is the difference between "you asked for something that is not here" and
+                // "nothing is registered". Those used to look identical.
+                self.available = self.repos.map(function (repo) {
+                    return repo.name;
+                });
                 self.repos = self.repos.filter(function (repo) {
-                    return String(repo.id) === self.only || repo.name === self.only;
+                    return identifies(repo, self.only);
                 });
             }
             self.render();
@@ -238,7 +333,20 @@
                 text: this.heading || text('ui.repositories') })
         ];
 
-        if (this.repos.length === 0) {
+        if (this.repos.length === 0 && this.only) {
+            // Registered-and-filtered-out is not the same as not-registered, and saying the
+            // second when the first is true sends the reader off to add a repository that is
+            // already there. The names are listed because otherwise there is nothing on screen
+            // to tell them what would have worked.
+            children.push(el('p', { 'class': 'cq-empty' }, [
+                el('span', { text: text('ui.filterNoMatch',
+                    [this.only, this.available.length]) }),
+                this.available.length
+                    ? el('span', { 'class': 'cq-filter-list',
+                        text: text('ui.filterAvailable', [this.available.join(', ')]) })
+                    : null
+            ]));
+        } else if (this.repos.length === 0) {
             children.push(el('p', {
                 'class': 'cq-empty',
                 text: CAN_MANAGE ? text('ui.emptyAdmin') : text('ui.empty')
@@ -687,9 +795,46 @@
         }
     }
 
+    /**
+     * Also mount containers that appear after the page has loaded.
+     *
+     * The macro browser's preview pane replaces its HTML every time a parameter changes, so a
+     * one-shot boot at DOMContentLoaded mounts the container that existed when the dialog
+     * opened and nothing after it. Watching for new ones costs nothing and does not depend on
+     * knowing when Confluence chooses to re-render.
+     */
+    function watchForLateArrivals() {
+        if (typeof window.MutationObserver !== 'function') {
+            return;
+        }
+        var pending = null;
+        var observer = new MutationObserver(function () {
+            // Coalesced: a preview refresh is many mutations for one new container.
+            if (pending === null) {
+                pending = window.setTimeout(function () {
+                    pending = null;
+                    boot();
+                }, 50);
+            }
+        });
+        observer.observe(document.documentElement, { childList: true, subtree: true });
+    }
+
+    // Exported so RepoMatchTest can pin the matcher against this file rather than against a
+    // copy of it - a copy is what drifts. Nothing on the page reads it.
+    global.CqRepoMatch = {
+        identifies: identifies,
+        normaliseRef: normaliseRef,
+        ownerAndRepo: ownerAndRepo
+    };
+
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', boot);
+        document.addEventListener('DOMContentLoaded', function () {
+            boot();
+            watchForLateArrivals();
+        });
     } else {
         boot();
+        watchForLateArrivals();
     }
-}());
+}(typeof window !== 'undefined' ? window : this));

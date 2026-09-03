@@ -26,8 +26,8 @@ MESSAGES = [
     ("co.bskim.confluence.code-quality.code-quality.param.repository.label",
      "Repository", "레포지터리"),
     ("co.bskim.confluence.code-quality.code-quality.param.repository.desc",
-     "Show only this repository, by display name or id. Empty shows all of them.",
-     "이 레포지터리만 표시(표시 이름 또는 id). 비우면 전체."),
+     "Pick one, or type its name, owner/repo, or clone URL. Empty shows all of them.",
+     "하나를 고르거나, 이름·owner/repo·클론 URL 중 아무거나 입력. 비우면 전체."),
     ("co.bskim.confluence.code-quality.code-quality.param.title.label",
      "Heading", "제목"),
     ("co.bskim.confluence.code-quality.code-quality.param.title.desc",
@@ -78,6 +78,15 @@ MESSAGES = [
     ("cq.ui.emptyAdmin",
      "No repositories yet. Add one to get a report.",
      "등록된 레포지터리가 없다. 추가하면 리포트를 뽑을 수 있다."),
+    # Registered-but-filtered-out and nothing-registered used to render identically, so a
+    # macro whose repository parameter matched nothing announced that no repository existed -
+    # with three of them in the table one click away.
+    ("cq.ui.filterNoMatch",
+     "No repository matches \u201c{0}\u201d. {1} registered.",
+     "\u201c{0}\u201d와(과) 일치하는 레포지터리가 없다. 등록된 것은 {1}개다."),
+    ("cq.ui.filterAvailable",
+     "Try one of: {0}",
+     "이 중 하나를 쓸 것: {0}"),
     ("cq.ui.confirmDelete",
      "Delete {0}? The clone and every cached metric for it are removed.",
      "{0}을(를) 삭제한다. 클론과 캐시된 지표가 모두 지워진다."),

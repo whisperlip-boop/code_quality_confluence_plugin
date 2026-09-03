@@ -341,6 +341,13 @@
     color: var(--cq-muted);
 }
 
+/* The list of names that would have matched, under the "no match" line. */
+.cq-filter-list {
+    display: block;
+    margin-top: 4px;
+    font-size: 12px;
+}
+
 /* ---------------------------------------------------------------- form */
 
 .cq-form {
