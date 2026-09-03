@@ -90,6 +90,18 @@ were measured but **are not wired in yet** - see below.
   key is `<plugin-key>.<macro-name>.label` and cannot be overridden by a descriptor element.
   Icon is an **attribute** on `<xhtml-macro>` pointing at a web-resource - a child `<icon>`
   element and a download resource named `icon` are both silently ignored.
+
+  **This is finished, and an earlier version of this file said otherwise.** The note claiming
+  the browser still reported `icon: None` was written before the attribute fix and never
+  re-checked. Verified from `/plugins/macrobrowser/browse-macros.action`: the icon resolves to
+  80x80 with the right location, the resource returns `image/png` at 3,571 bytes, and it is
+  legible at the 24px the browser list uses. Twenty-two of this instance's 85 macros declare an
+  icon at all; ours is one, in the same form another plugin on the same instance uses.
+
+  The same metadata did still hold two unresolved keys - `body.label` and `body.desc`.
+  Confluence generates them whatever the body type, and this macro declares `bodyType: NONE`,
+  so they were invisible. Added anyway: the macro *title* sat there unresolved once too, and
+  that one was very visible. Nothing in the macro metadata reads as a raw key now.
 - Row action icons now use the supplied artwork as CSS masks, so they still inherit
   `currentColor` for hover and disabled states. `MakeIcons` generates the sizes.
 - Required fields marked with `*`, inline validation instead of `window.alert`.
@@ -427,9 +439,7 @@ the page would have rendered `{0}` and looked fine at a glance.
 
 ## Next, in order
 
-1. The macro browser **icon** still reports `icon: None` despite the attribute resolving in the
-   descriptor JSON and the resource serving as `image/png`. Cosmetic, unresolved.
-2. **A known limitation, not on the list but worth writing down.** `DuplicateDetector` keeps at
+1. **A known limitation, not on the list but worth writing down.** `DuplicateDetector` keeps at
    most 16 locations per window hash, so in a tree where one block appears hundreds of times
    only the first 16 are paired and duplication is understated. It is deterministic - the walk
    is in path order - and pre-existing, but it is a real ceiling on very repetitive trees.

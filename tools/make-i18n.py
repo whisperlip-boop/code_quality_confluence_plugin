@@ -33,6 +33,13 @@ MESSAGES = [
     ("co.bskim.confluence.code-quality.code-quality.param.title.desc",
      "Heading shown above the table. Empty uses the default.",
      "표 위에 표시할 제목. 비우면 기본값."),
+    # Confluence generates body keys whatever the body type, so these two sat in the macro
+    # browser metadata as raw keys. Invisible today because the macro declares bodyType NONE,
+    # but the macro title sat there unresolved once too and that one was very visible.
+    ("co.bskim.confluence.code-quality.code-quality.body.label",
+     "Body", "본문"),
+    ("co.bskim.confluence.code-quality.code-quality.body.desc",
+     "This macro takes no body.", "이 매크로는 본문을 받지 않는다."),
 
     # --- plugin descriptor ----------------------------------------------------
     ("cq.macro.description",
