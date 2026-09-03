@@ -78,7 +78,14 @@ async function main() {
         return r.result.value;
     };
 
-    /** What the preview frame holds: the selection it was told, and the rows it drew. */
+    /**
+     * What the preview frame holds: the selection it was told, and the rows it drew.
+     *
+     * <p>Reports the app's own count beside the drawn one, because those disagreeing is the
+     * fault that took longest to see - the app had rendered both rows and Confluence's table
+     * enhancement had eaten one. `tables` must stay 0: the preview draws a list precisely so
+     * that enhancement has nothing to grab.</p>
+     */
     const preview = () => evaluate(`
         (function () {
             var f = document.getElementById('macro-preview-iframe');
@@ -86,11 +93,15 @@ async function main() {
             var d = f.contentDocument;
             if (!d || !d.body) { return 'no document'; }
             var app = d.querySelector('.cq-app');
+            if (!app) { return 'no app root'; }
             var names = [];
-            var cells = d.querySelectorAll('.cq-table tbody tr .cq-name');
+            var cells = d.querySelectorAll('.cq-preview-row .cq-name');
             for (var i = 0; i < cells.length; i++) { names.push(cells[i].textContent); }
-            return 'only=' + (app ? JSON.stringify(app.getAttribute('data-only')) : 'none')
-                + ' rows=[' + names.join(' | ') + ']';
+            return 'only=' + JSON.stringify(app.getAttribute('data-only'))
+                + ' app=' + (app.cqApp ? app.cqApp.repos.length : '?')
+                + ' drawn=' + names.length
+                + ' tables=' + d.querySelectorAll('table').length
+                + ' [' + names.join(' | ') + ']';
         })()`);
 
     await S('Page.navigate', { url: BASE + '/pages/editpage.action?pageId=' + PAGE_ID });
@@ -105,10 +116,20 @@ async function main() {
         ? `{selectedMacro: {name: 'code-quality', params: {repository: '${STORED}'}, body: ''}}`
         : "{presetMacroName: 'code-quality'}";
     console.log('opening the dialog with ' + (STORED ? 'stored: ' + STORED : 'nothing stored'));
-    for (let i = 0; i < 30; i++) {
+    // Open once and then wait. Calling open() again while Confluence is still building the
+    // dialog throws inside its own addPanel, which reads as a product failure and is not one.
+    for (let attempt = 0; attempt < 3; attempt++) {
         await evaluate('AJS.MacroBrowser.open(' + settings + ')');
-        await sleep(1000);
-        if (await evaluate("!!document.querySelector('.cq-picker-row input')")) { break; }
+        let up = false;
+        for (let i = 0; i < 20; i++) {
+            await sleep(1000);
+            if (await evaluate("!!document.querySelector('.cq-picker-row input')")) {
+                up = true;
+                break;
+            }
+        }
+        if (up) { break; }
+        console.log('  dialog did not come up; retrying');
     }
     await sleep(3000);
     console.log('  after open        ' + await preview());
@@ -119,14 +140,43 @@ async function main() {
             boxes[${which}].click();
             return boxes[${which}].checked;
         })()`);
+    const open = () => evaluate("document.querySelector('.cq-picker-trigger').click()");
+    const boxCount = () => evaluate(
+        "document.querySelectorAll('.cq-picker-row input[type=checkbox]').length");
+    /** Ticks a box only if it is not already ticked - an edit opens with some already on. */
+    const ensureTicked = (which) => evaluate(`
+        (function () {
+            var box = document.querySelectorAll('.cq-picker-row input[type=checkbox]')[${which}];
+            if (!box.checked) { box.click(); }
+            return box.checked;
+        })()`);
+    const selection = () => evaluate("$('#macro-param-repository').val()");
 
-    await evaluate("document.querySelector('.cq-picker-trigger').click()");
+    /*
+     * Phase one: the very first close after a fresh open, which is the only path that still
+     * goes through a server render - an insert whose required parameter has been empty has no
+     * frame to paint into, because Confluence removes it. It is also where every remaining
+     * fault has surfaced, so it gets its own phase rather than being buried in a sweep.
+     */
+    const count = await boxCount();
+    await open();
+    await sleep(200);
+    for (let i = 0; i < count; i++) {
+        await ensureTicked(i);
+        await sleep(150);
+    }
+    console.log('  all ' + count + ' ticked, field = ' + JSON.stringify(await selection()));
+    await open();
+    await sleep(4000);
+    console.log('  first close       ' + await preview());
+
+    // Phase two: ticking with a frame already there, which repaints and asks for nothing.
+    await open();
     await sleep(200);
 
     // Each step reports straight away: a repaint is local, so there is nothing to wait for.
     // Anything appearing in "renders" here is a server round trip that could still race.
-    const boxes = await evaluate(
-        "document.querySelectorAll('.cq-picker-row input[type=checkbox]').length");
+    const boxes = count;
     for (let i = 0; i < boxes; i++) {
         const on = await tick(i);
         await sleep(250);
@@ -141,10 +191,10 @@ async function main() {
 
     // Finish with something ticked: an insert whose required parameter has been empty has no
     // frame to paint into, so this is the one path that must still fall back to a render.
-    await tick(0);
+    await ensureTicked(0);
     await sleep(250);
     console.log('  box 0 ticked   ' + await preview());
-    await evaluate("document.querySelector('.cq-picker-trigger').click()");
+    await open();
     await sleep(4000);
     console.log('  dropdown closed   ' + await preview());
     console.log('  value saved would be: '

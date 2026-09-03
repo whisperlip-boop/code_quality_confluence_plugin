@@ -530,16 +530,35 @@ with what is ticked. Racing is now harmless instead of merely unlikely. The Refr
 survives as the fallback for the one case a repaint cannot cover - an insert whose required
 parameter has been empty has no frame to paint into, because Confluence removes it.
 
-**`tools/macro-dialog-probe.js` is how any of this was established, and how to check it again.**
+**Confluence's table enhancement was eating the first row, and that was the other half.** After
+the repaint went in, the reporter saw the first close of a fresh insert still show one row of
+two - and unticking and reticking fix it. The probe showed the app believing it had rendered
+both rows while the frame's table carried two `<thead>` elements: Confluence turns tables in
+rendered content into sortable ones, that pass runs in the preview frame *after* this script has
+drawn its rows, and it read the first data row as a second header row. One selected showed none,
+two showed one. Any repaint afterwards replaces the table with an unenhanced one, which is
+exactly why the second attempt always looked fine.
+
+Opting out would mean naming whatever selector Confluence happens to use. **The preview now
+draws no table at all** - a list of divs, which is what the narrow frame was laying the table
+out as anyway (its media query hides the header and makes every cell a block, so nothing a
+reader sees has changed). Not being a table is not something an enhancer can change its mind
+about. The page and the administration screen keep their tables: their render always happens
+after the enhancement pass, so they were never affected, and both were re-checked.
+
+**`tools/macro-dialog-probe.js` is how all of this was established, and how to check it again.**
 It drives the real dialog over CDP - Chrome plus Node's built-in WebSocket, nothing installed -
 ticks the real boxes, and prints what the frame holds after each one plus every render request
-that went out. Screenshots cannot see this and three rounds of reasoning got it wrong; the probe
-found it in one run. It runs with the cache off by default, deliberately. What it reports now:
+that went out. Screenshots cannot see any of it and four rounds of reasoning got it wrong; the
+probe found both faults in one run each. Two things it reports deliberately: `app=` beside
+`drawn=`, because those disagreeing is what exposed the enhancement, and `tables=`, which must
+stay `0` in the preview. It runs with the cache off by default. What it reports now, on both a
+fresh insert and an edit with one repository stored:
 
-    edit, one repository stored     tick -> two rows at once, no server render
-                                    untick -> one row, untick both -> none
-    insert, nothing stored          no frame until the dropdown closes, then one
-                                    render with the right value and the right row
+    first close after a fresh open   the full selection, app == drawn, tables=0
+                                     (insert: one server render; edit: none, it repaints)
+    every tick after that            repaints at once, app == drawn, no render at all
+    untick everything                no rows and the "choose one or more" line
 
 Also confirmed in the same pass: the page no longer offers Delete (3-A), and the preview note
 says deleting lives on the administration screen. A repository whose stored name was hand-typed

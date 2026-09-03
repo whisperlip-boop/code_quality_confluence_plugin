@@ -100,6 +100,25 @@
     border-bottom: 1px solid var(--cq-line);
 }
 
+/*
+ * The macro browser preview, which is a list rather than a table - see App.renderRows for why.
+ * Laid out the way the narrow frame laid the table out anyway: name over URL, one hairline per
+ * repository, so replacing the table changed nothing a reader would notice.
+ */
+.cq-preview-row {
+    padding: 10px 0;
+    border-bottom: 1px solid var(--cq-line);
+}
+
+.cq-preview-name {
+    padding-bottom: 4px;
+}
+
+.cq-preview-row .cq-url {
+    white-space: normal;
+    word-break: break-all;
+}
+
 .cq-name {
     font-weight: 500;
     word-break: break-word;

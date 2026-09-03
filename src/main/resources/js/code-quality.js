@@ -403,32 +403,48 @@
         this.root.appendChild(this.editing ? this.renderForm() : this.renderTable());
     };
 
-    App.prototype.renderTable = function () {
+    /**
+     * The rows, as a table on a page and as a plain list in the macro preview.
+     *
+     * <p>The preview deliberately builds no {@code <table>}. Confluence enhances tables in
+     * rendered content into sortable ones, and in the preview frame that enhancement runs after
+     * this script has drawn its rows - so it found a finished table, decided the first data row
+     * was a second header row, and moved it into a {@code <thead>}. One repository selected
+     * showed none; two showed one. Reproduced with {@code tools/macro-dialog-probe.js}, which
+     * caught the table carrying two {@code <thead>} elements while this app believed it had
+     * rendered both rows.</p>
+     *
+     * <p>Opting out of that enhancement would mean naming whatever selector Confluence happens
+     * to use. Not being a table is not something it can change its mind about - and the preview
+     * loses nothing, because its two columns render stacked anyway: the frame is narrow enough
+     * to trigger the layout that hides the header and makes every cell a block.</p>
+     */
+    App.prototype.renderRows = function () {
         var self = this;
-        // Two columns in the preview, five on a page - see renderPreviewRow.
-        var columns = IN_MACRO_PREVIEW
-            ? ['name', 'url']
-            : ['name', 'url', 'sync', 'status', 'actions'];
+        if (IN_MACRO_PREVIEW) {
+            return el('div', { 'class': 'cq-preview-list' }, this.repos.map(function (repo) {
+                return self.renderPreviewRow(repo);
+            }));
+        }
+        var columns = ['name', 'url', 'sync', 'status', 'actions'];
         var cols = el('colgroup', null, columns.map(function (name) {
             return el('col', { 'class': 'cq-col-' + name });
         }));
-        var headings = [
+        var head = el('thead', null, [el('tr', null, [
             el('th', { text: text('ui.header.name') }),
-            el('th', { text: text('ui.header.url') })
-        ];
-        if (!IN_MACRO_PREVIEW) {
-            headings.push(el('th', { text: text('ui.header.lastSync') }));
-            headings.push(el('th', { text: text('ui.header.status') }));
-            headings.push(el('th', {
-                text: text('ui.header.actions'), style: 'text-align:right'
-            }));
-        }
-        var head = el('thead', null, [el('tr', null, headings)]);
-
+            el('th', { text: text('ui.header.url') }),
+            el('th', { text: text('ui.header.lastSync') }),
+            el('th', { text: text('ui.header.status') }),
+            el('th', { text: text('ui.header.actions'), style: 'text-align:right' })
+        ])]);
         var body = el('tbody', null, this.repos.map(function (repo) {
-            return IN_MACRO_PREVIEW ? self.renderPreviewRow(repo) : self.renderRow(repo);
+            return self.renderRow(repo);
         }));
+        return el('table', { 'class': 'cq-table' }, [cols, head, body]);
+    };
 
+    App.prototype.renderTable = function () {
+        var self = this;
         var children = [
             el('h3', { 'class': 'cq-panel-title',
                 text: this.heading || text('ui.repositories') })
@@ -461,7 +477,7 @@
                 text: CAN_MANAGE ? text('ui.emptyAdmin') : text('ui.empty')
             }));
         } else {
-            children.push(el('table', { 'class': 'cq-table' }, [cols, head, body]));
+            children.push(this.renderRows());
         }
 
         var bar = [];
@@ -499,13 +515,13 @@
      * only question the dialog can change the answer to.</p>
      */
     App.prototype.renderPreviewRow = function (repo) {
-        var nameCell = [el('span', { 'class': 'cq-name', text: label(repo) })];
+        var name = [el('span', { 'class': 'cq-name', text: label(repo) })];
         if (repo.branch) {
-            nameCell.push(el('span', { 'class': 'cq-branch', text: repo.branch }));
+            name.push(el('span', { 'class': 'cq-branch', text: repo.branch }));
         }
-        return el('tr', null, [
-            el('td', null, nameCell),
-            el('td', { 'class': 'cq-url', title: repo.url, text: repo.url })
+        return el('div', { 'class': 'cq-preview-row' }, [
+            el('div', { 'class': 'cq-preview-name' }, name),
+            el('div', { 'class': 'cq-url', title: repo.url, text: repo.url })
         ]);
     };
 
