@@ -289,12 +289,58 @@ Java has the *thinnest* right tail of the three.
 Raw data and per-repository exclusions: `tools/cohort-{java,js,py}-2026-09-03.tsv` and the
 matching `.summary.txt`. `ALGO_VERSION` is at 3, because mirror exclusion changes stored numbers.
 
+### Operational robustness - D-2 to D-6 closed
+
+**D-2, orphans.** Deleting a repository mid-analysis left two kinds of wreckage. On disk, the
+request removed the row and discarded the clone while the analysis thread was still inside
+`sync` - which does not check for cancellation - so the clone finished into a directory nobody
+owned. `GitClient.discardOrphans` sweeps those after every run: a sweep rather than tighter
+coordination, because a node killed during a clone leaves the same thing and no care on the
+delete path covers that. In the database, `persistSuccess` wrote `CqCommit`, `CqClone` and
+`CqRun` rows for a repository that was already gone; it now checks the row inside the
+transaction and discards the result.
+
+Verified live by planting a `987.git` directory and running an analysis: swept, with `1.git` and
+`3.git` untouched. The first attempt at that test failed for the right reason and found a real
+gap - the planted directory was root-owned, so Confluence could not delete it,
+`deleteRecursively` swallowed the failure, and `discardOrphans` counted it as removed. It
+reports failure now, and an orphan that cannot be deleted is logged as a warning instead of as
+a success.
+
+**D-3, sixty seconds on a request thread.** The probe made two `ls-remote` attempts at thirty
+seconds each, so a host that accepts a connection and never answers held a Confluence request
+thread for a minute. Fifteen seconds now - a user-interface budget, not a network one - and a
+`timeout` or `unreachable` result no longer triggers the credentialed retry, because nothing
+answered and a credential cannot change that. Measured against a black-hole address:
+**15.1s without a token, 15.7s with one**, against 60s before.
+
+**D-5, no ceiling anywhere.** Three, each failing loudly rather than degrading:
+
+- A clone will not start with under 2GB free where clones are kept. That disk is the Confluence
+  home, so filling it stops the instance writing attachments and indexes; it is not a reporting
+  problem.
+- A clone over 4GB is refused after the fetch, git offering no way to ask a remote its size in
+  advance. For scale, the largest repository in the reference cohorts is about 200MB.
+- `MAX_COMMITS` already bounded the walk at 20,000, which bounds the cached rows in heap and the
+  rows one transaction writes as well - roughly 8MB, so the per-commit cache needs no separate
+  ceiling. But it **truncated in silence**: the span, the commit count, the authors and the
+  trend all described the newest slice while the report presented them as the repository. There
+  is a `historyTruncated` caveat now.
+
+**D-4** made the job claim one atomic map operation, and **D-6** asks for the `hasReport` column
+once instead of per row - at forty repositories and a two-second poll that was twenty
+transactions a second repeating one table scan. Both shipped with the threshold work.
+
 ## Next, in order
 
-1. **D-2 to D-6** from the review: operational robustness. Orphans left by deleting during a
-   run, up to 60 seconds blocking a request thread, the check-then-act race in `submit()`, no
-   ceiling on clone size, and an N+1 transaction behind the repository list.
-5. **E-3**: bulk-import detection may over-fire on a young repository. E-4 is closed.
+1. **E-3**: bulk-import detection may over-fire on a young repository. The last open item from
+   the first review.
+2. **A mirror one file wide.** `moment` shows the gap: a bundle that concatenates a whole
+   directory is not a subtree, so `MirrorTrees` cannot see it. Detecting "this file holds most
+   of that directory" would close the last class of checked-in build output.
+3. The macro browser **icon** still reports `icon: None` despite the attribute resolving in the
+   descriptor JSON and the resource serving as `image/png`. Cosmetic, unresolved.
+4. The two registered repositories have **no spaces linked**, so only administrators see them.
 
 ## Things worth knowing before touching the code
 

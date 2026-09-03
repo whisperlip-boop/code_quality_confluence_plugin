@@ -179,6 +179,12 @@ Everything runs inside Confluence - no worker, no external database, no Node run
   field, by `AnalysisEngineTest`.
 - The duplicate detector and the error/connectivity scanners are Java reimplementations of what
   the proof of concept did with jscpd and tree-sitter, which a JVM plugin cannot load.
+- **Every limit fails loudly.** A clone will not start with under 2GB free, a clone over 4GB is
+  refused, a tree too large to index stops the run, and a history longer than 20,000 commits is
+  analysed as its newest slice *and says so on the report*. The reason is the same each time: a
+  number that looks right and is not costs more than a run that stops and explains itself.
+- Clone directories with no repository behind them are swept after every run, which also covers
+  a node killed mid-clone.
 
 ## Access
 
