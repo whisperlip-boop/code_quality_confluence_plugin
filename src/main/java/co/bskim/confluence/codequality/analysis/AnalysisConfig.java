@@ -148,6 +148,32 @@ public final class AnalysisConfig
     private static final int MAX_INDEX_ENTRIES_CEILING = 8_000_000;
     public static final int MAX_CLONE_PAIRS = 400;
 
+    /**
+     * When one file looks like a bundle of other files rather than a file.
+     *
+     * <p>A repository that checks in its build output reports its release process instead of
+     * its code: {@code moment.js} is the compiled form of {@code src/}, so 73% of it is
+     * duplicated and the repository measures 48%. Excluding it automatically would be the
+     * wrong trade - the same shape is a module somebody copied wholesale, which is the finding
+     * this plugin exists for - so it is reported and the remedy is the per-repository exclude
+     * field.</p>
+     *
+     * <p>Breadth is what separates the two: a bundle holds the content of dozens of files, a
+     * copy mirrors one. Measured over the 124 most-duplicated files in the 112 cohort
+     * repositories ({@code tools/BundleProbe.java}), clone partners per file run median 2,
+     * p90 4, p95 5, p99 8, and the highest ordinary file is 11 - svelte's generated
+     * {@code index.d.ts}, itself bundle-shaped. {@code moment.js} has 69, and with {@code min/}
+     * left in, {@code min/locales.js} has 115. Nothing sits between 11 and 69, so twenty is
+     * chosen for being in the empty middle rather than for being any particular number:
+     * typeorm's per-database query runners (8 partners) and netty's channel classes (5) keep
+     * being reported, which they must be.</p>
+     */
+    public static final int BUNDLE_MIN_PARTNERS = 20;
+    /** Most of the file has to be duplicated, or it is a file that merely shares a block. */
+    public static final double BUNDLE_MIN_SELF_SHARE = 0.5;
+    /** Below this a file is too small for "most of it is elsewhere" to mean much. */
+    public static final int BUNDLE_MIN_LINES = 100;
+
     /** Paths that are checked in but not written by the team. */
     public static final String[] DEFAULT_EXCLUDES = {
             "**/node_modules/**", "**/vendor/**", "**/third_party/**", "**/thirdparty/**",

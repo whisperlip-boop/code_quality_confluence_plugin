@@ -150,6 +150,12 @@ public final class ReportLocalizer
     {
         switch (code)
         {
+            case "bundleFile":
+                return new Object[] {
+                        base(str(p, "file")), num(p, "dupLines", language),
+                        num(p, "fileLines", language), num(p, "partners", language),
+                        num(p, "others", language), str(p, "examples")
+                };
             case "crossFileClone":
                 return new Object[] {
                         base(str(p, "fileA")), num(p, "lineA", language),

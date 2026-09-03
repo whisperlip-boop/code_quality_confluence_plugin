@@ -28,7 +28,8 @@ public class ReportLocalizerTest
 {
     /** Every code {@code ReportBuilder.findings} can produce. */
     private static final List<String> FINDING_CODES = Arrays.asList(
-            "crossFileClone", "cloneConcentration", "errorHandling", "connectivityDrift",
+            "bundleFile", "crossFileClone", "cloneConcentration", "errorHandling",
+            "connectivityDrift",
             "busFactor", "busFactorClean", "churnSpike", "identitySuspects", "copyPasteHigh");
 
     private static final List<String> CAVEAT_CODES = Arrays.asList(
@@ -179,6 +180,11 @@ public class ReportLocalizerTest
         params.addProperty("trees", 2);
         params.addProperty("names", "android/guava (= guava)");
         params.addProperty("measured", 105621);
+        params.addProperty("dupLines", 2255);
+        params.addProperty("fileLines", 3079);
+        params.addProperty("partners", 69);
+        params.addProperty("others", 2);
+        params.addProperty("examples", "src/lib/moment.js, src/locale/ja.js");
 
         JsonObject entry = new JsonObject();
         entry.addProperty("code", code);

@@ -55,7 +55,7 @@ administrators see them.** Link a space to give a team access.
   commit whose cached row has no statics.
 - `STATIC_SAMPLE_TARGET` said 40 while the call site used 40x5; it is 200 and used directly.
 
-### A-3 — tests exist now (38, all green)
+### A-3 — tests exist now (43, all green)
 
 `CopyPasteClassifierTest` (6): scattered idioms are not copies (the case that made v1 report
 13.7%), a six-line block copied across files, a move within a file, a move across files, a copy
@@ -379,14 +379,60 @@ fault: exit 1, naming the key.
 verdict can be audited - "added 4,124 lines to a tree of 0" is checkable, "this was an import"
 is not.
 
+### A mirror one file wide - reported, not excluded
+
+`moment` was the case: `min/locales.js` is every locale file concatenated, and after excluding
+`min/` the repository still measured 48% because `moment.js` and `locale/` at the root are the
+compiled form of `src/`. `MirrorTrees` cannot see it - the copy is one file, not a subtree - and
+no exclude pattern catches build output sitting at a repository root.
+
+**The decision was to report it and not to exclude it.** A subtree mirror rests on 25 or more
+shared paths, which is strong structural evidence; a single file rests on content overlap alone,
+and auto-excluding on weaker evidence inverts the risk that was accepted for mirrors. The
+remedy already exists one field away - the per-repository exclude patterns - and a finding that
+names the file, its partner count and three of the partners lets the reader check the claim
+rather than trust it. Nothing is hidden: the duplication figures still include the file, and the
+finding says so.
+
+**The discriminator is breadth, and it was measured rather than chosen.** A bundle holds the
+content of dozens of files; a module somebody copied wholesale mirrors one - and that one has to
+keep being reported, because it is the finding the plugin exists for. Over the 124
+most-duplicated files in the 112 cohort repositories (`tools/BundleProbe.java`), clone partners
+per file run:
+
+| statistic | partners |
+|---|---|
+| median | 2 |
+| p90 | 4 |
+| p95 | 5 |
+| p99 | 8 |
+| highest ordinary file | 11 - svelte's generated `index.d.ts`, itself bundle-shaped |
+| `moment.js` | **69** |
+| `min/locales.js`, with `min/` left in | **115** |
+
+Nothing sits between 11 and 69. Twenty is picked for being in the empty middle, not for being a
+round number: typeorm's per-database query runners (8 partners) and netty's channel classes (5)
+keep being reported. Run against the whole cohort through the product's own
+`DuplicateDetector.bundleSuspects`, exactly one file in 112 repositories is flagged -
+`moment.js` - and the three live repositories flag none.
+
+Five tests, and four of them are shapes that must *not* be called bundles: a wholesale copy of
+one module, a family of eight similar drivers, a file that merely shares a preamble widely, and
+a file under the line floor.
+
+One incident worth keeping: the render check failed with *"No argument list for finding code:
+bundleFile"* because the jar was stale - `atlas-mvn test` compiles but does not repackage. That
+is the guard added earlier in the day doing its job, and it is the reason it exists: without it
+the page would have rendered `{0}` and looked fine at a glance.
+
 ## Next, in order
 
-1. **A mirror one file wide.** `moment` shows the gap: a bundle that concatenates a whole
-   directory is not a subtree, so `MirrorTrees` cannot see it. Detecting "this file holds most
-   of that directory" would close the last class of checked-in build output.
-2. The macro browser **icon** still reports `icon: None` despite the attribute resolving in the
+1. The macro browser **icon** still reports `icon: None` despite the attribute resolving in the
    descriptor JSON and the resource serving as `image/png`. Cosmetic, unresolved.
-3. The two registered repositories have **no spaces linked**, so only administrators see them.
+2. **A known limitation, not on the list but worth writing down.** `DuplicateDetector` keeps at
+   most 16 locations per window hash, so in a tree where one block appears hundreds of times
+   only the first 16 are paired and duplication is understated. It is deterministic - the walk
+   is in path order - and pre-existing, but it is a real ceiling on very repetitive trees.
 
 ## Things worth knowing before touching the code
 

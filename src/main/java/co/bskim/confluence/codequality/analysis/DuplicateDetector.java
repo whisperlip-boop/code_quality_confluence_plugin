@@ -5,6 +5,8 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Set;
+import java.util.HashSet;
 import java.util.Map;
 
 /**
@@ -46,6 +48,15 @@ public final class DuplicateDetector
         /** Subtrees left out as copies of other subtrees, for the report to declare. */
         public final List<MirrorTrees.Mirror> mirrors = new ArrayList<MirrorTrees.Mirror>();
         /**
+         * For each file, the other files it shares blocks with. Uncapped, unlike {@link #hits}.
+         *
+         * <p>Breadth is what separates a checked-in bundle from a copied module: a bundle holds
+         * the content of dozens of files, a copy mirrors one. The pair list cannot answer that
+         * because it stops at {@link AnalysisConfig#MAX_CLONE_PAIRS}.</p>
+         */
+        public final Map<String, Set<String>> partnersByFile =
+                new HashMap<String, Set<String>>();
+        /**
          * Code lines actually measured - the tree's lines less any mirror subtree.
          *
          * <p>The ratio has to use this as its denominator. Taking mirror lines out of the
@@ -55,8 +66,80 @@ public final class DuplicateDetector
         public int measuredLines;
     }
 
+    /** A file that holds the content of many other files - see {@link #bundleSuspects}. */
+    public static final class BundleSuspect
+    {
+        public final String path;
+        public final int fileLines;
+        public final int dupLines;
+        public final int partners;
+        /** A few partner paths, so a reader can check the claim instead of trusting it. */
+        public final List<String> examples;
+
+        BundleSuspect(String path, int fileLines, int dupLines, int partners,
+                      List<String> examples)
+        {
+            this.path = path;
+            this.fileLines = fileLines;
+            this.dupLines = dupLines;
+            this.partners = partners;
+            this.examples = examples;
+        }
+    }
+
     private DuplicateDetector()
     {
+    }
+
+    /**
+     * Files that look like a bundle of other files rather than like a file.
+     *
+     * <p>Reported, never excluded. The thresholds and the measurements behind them are in
+     * {@link AnalysisConfig#BUNDLE_MIN_PARTNERS}; the short version is that an ordinary
+     * duplicated file shares blocks with at most a handful of others while a checked-in build
+     * artifact shares them with dozens, and nothing in the reference cohorts sits between.</p>
+     *
+     * <p>Worst first, so the caller can name one and count the rest.</p>
+     */
+    public static List<BundleSuspect> bundleSuspects(TreeState state, Result result)
+    {
+        List<BundleSuspect> suspects = new ArrayList<BundleSuspect>();
+        for (Map.Entry<String, Integer> entry : result.byFile.entrySet())
+        {
+            String path = entry.getKey();
+            FileLines lines = state.get(path);
+            if (lines == null || lines.norm.size() < AnalysisConfig.BUNDLE_MIN_LINES)
+            {
+                continue;
+            }
+            if (entry.getValue() < AnalysisConfig.BUNDLE_MIN_SELF_SHARE * lines.norm.size())
+            {
+                continue;
+            }
+            Set<String> partners = result.partnersByFile.get(path);
+            int count = partners == null ? 0 : partners.size();
+            if (count < AnalysisConfig.BUNDLE_MIN_PARTNERS)
+            {
+                continue;
+            }
+            List<String> examples = new ArrayList<String>(partners);
+            Collections.sort(examples);
+            suspects.add(new BundleSuspect(path, lines.norm.size(), entry.getValue(), count,
+                    examples.subList(0, Math.min(3, examples.size()))));
+        }
+        Collections.sort(suspects, new Comparator<BundleSuspect>()
+        {
+            @Override
+            public int compare(BundleSuspect a, BundleSuspect b)
+            {
+                if (a.partners != b.partners)
+                {
+                    return b.partners - a.partners;
+                }
+                return a.path.compareTo(b.path);
+            }
+        });
+        return suspects;
     }
 
     public static Result detect(TreeState state)
@@ -123,6 +206,8 @@ public final class DuplicateDetector
                         mark(covered.get(qi), j, length);
                         mark(covered.get(pi), i, length);
                         result.cloneCount++;
+                        partner(result, paths.get(pi), paths.get(qi));
+                        partner(result, paths.get(qi), paths.get(pi));
                         if (result.hits.size() < AnalysisConfig.MAX_CLONE_PAIRS)
                         {
                             result.hits.add(new CloneHit(
@@ -206,6 +291,22 @@ public final class DuplicateDetector
             total += LineNormalizer.tokenCount(lines.get(i));
         }
         return total;
+    }
+
+    /** Records that two files share a block. Self-pairs are skipped: a file is not its own. */
+    private static void partner(Result result, String file, String other)
+    {
+        if (file.equals(other))
+        {
+            return;
+        }
+        Set<String> partners = result.partnersByFile.get(file);
+        if (partners == null)
+        {
+            partners = new HashSet<String>();
+            result.partnersByFile.put(file, partners);
+        }
+        partners.add(other);
     }
 
     private static void mark(boolean[] flags, int from, int length)

@@ -412,6 +412,23 @@ MESSAGES = [
     ("cq.label.noData", "Not enough history yet.", "히스토리가 아직 부족하다."),
 
     # --- findings -------------------------------------------------------------
+    # No apostrophes: MessageFormat eats a lone one, and check_message_format refuses it.
+    ("cq.finding.bundleFile.title",
+     "{0} holds code that also lives in {3} other files",
+     "{0}이(가) 다른 파일 {3}개에도 있는 코드를 담고 있다"),
+    ("cq.finding.bundleFile.body",
+     "{1} of its {2} lines appear elsewhere in the repository, spread across {3} files - among "
+     "them {5}. That is the shape of checked-in build output rather than of a file: a bundle "
+     "holds dozens of other files, while a copied module mirrors one. Nothing is excluded on "
+     "this evidence, so the duplication figures above include it; if it is generated, add it "
+     "to the exclude patterns for this repository and the numbers will describe the source. "
+     "If it is not generated, it is the largest piece of duplication here.",
+     "이 파일 {2}줄 중 {1}줄이 레포지터리의 다른 곳에도 있고, {3}개 파일에 걸쳐 있다 — "
+     "예를 들어 {5}. 이건 파일이 아니라 체크인된 빌드 산출물의 형태다. 번들은 다른 파일 "
+     "수십 개를 담고 있고, 복사된 모듈은 하나만 닮는다. 이 근거만으로는 아무것도 "
+     "제외하지 않았으므로 위의 중복 수치에는 이 파일이 포함돼 있다. 생성물이라면 이 "
+     "레포지터리의 제외 패턴에 추가하면 수치가 소스를 설명하게 된다. 생성물이 아니라면, "
+     "여기서 가장 큰 중복 덩어리다."),
     ("cq.finding.crossFileClone.title",
      "The same block lives in {0} and {2}",
      "같은 블록이 {0}와 {2}에 함께 있다"),

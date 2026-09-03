@@ -164,6 +164,25 @@ that:
 Firing wrongly is the failure that matters here, since it hides exactly what this tool is for -
 so four of the six tests in `MirrorTreesTest` are trees that must *not* be called mirrors.
 
+### A copy one file wide
+
+A repository that checks in its build output has the same problem in a shape a subtree rule
+cannot see: `moment.js` is the compiled form of `src/`, one file holding dozens. That one is
+**reported and not excluded** - a single file rests on content overlap alone, where a subtree
+mirror rests on twenty-five or more shared paths, and excluding on the weaker evidence would
+hide the case this tool exists for: a module somebody copied wholesale.
+
+Breadth is the discriminator, measured over the 124 most-duplicated files in the cohorts: clone
+partners per file run median 2, p95 5, p99 8, and the highest ordinary file is 11. `moment.js`
+has 69. Nothing sits in between, so the threshold is twenty - typeorm's per-database query
+runners (8) and netty's channel classes (5) keep being reported. Across all 112 repositories
+exactly one file is flagged.
+
+The finding names the file, how much of it lives elsewhere, how many files that spans and three
+of them, so the claim can be checked rather than believed. If the file is generated, the fix is
+the repository's own exclude patterns; if it is not, it is the largest piece of duplication
+there is.
+
 ## Architecture
 
 Everything runs inside Confluence - no worker, no external database, no Node runtime:
@@ -252,7 +271,7 @@ as ISO-8859-1, so Korean has to be `\uXXXX` escaped. Edit `tools/make-i18n.py`, 
 atlas-mvn test
 ```
 
-Thirty-eight of them, and they exist because the numbers are the product. Six pin the copy-paste
+Forty-three of them, and they exist because the numbers are the product. Six pin the copy-paste
 classifier: scattered language idioms must not count as copying (the case that made the first
 version report 13.7%), a block copied across files, a move within a file, a move across files, a
 copy whose source survived, and **classification independent of the order files entered the
@@ -274,6 +293,9 @@ of them fail against the unfixed code; the other two guard the opposite mistake,
 clone that was still good.
 
 Six cover mirrored subtrees, four of them trees that must not be treated as one.
+
+Five decide when a file is a bundle of other files rather than a file, four of them files that
+must not be treated as one.
 
 Six decide when a commit counts as wholesale rather than as authored work - three of them
 commits that must be excluded and three that must not, since the rule was narrowed after

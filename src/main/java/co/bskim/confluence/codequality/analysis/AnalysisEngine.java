@@ -80,6 +80,12 @@ public final class AnalysisEngine
         public boolean historyTruncated;
         /** Subtrees left out of the duplication measurement as copies of other subtrees. */
         public List<MirrorTrees.Mirror> headMirrors = new ArrayList<MirrorTrees.Mirror>();
+        /**
+         * Files that look like a bundle of other files. Reported, never excluded - the
+         * remedy is the repository's own exclude patterns.
+         */
+        public List<DuplicateDetector.BundleSuspect> headBundles =
+                new ArrayList<DuplicateDetector.BundleSuspect>();
         public int headBare;
         public int headBroad;
         public int headSwallow;
@@ -454,6 +460,7 @@ public final class AnalysisEngine
         outcome.headDupClones = duplicates.cloneCount;
         outcome.headDupMeasuredLines = duplicates.measuredLines;
         outcome.headMirrors = duplicates.mirrors;
+        outcome.headBundles = DuplicateDetector.bundleSuspects(state, duplicates);
         outcome.headClones = duplicates.hits;
         outcome.headDupByFile = duplicates.byFile;
         outcome.headBare = patterns.bare;

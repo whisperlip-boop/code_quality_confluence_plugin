@@ -808,6 +808,27 @@ public final class ReportBuilder
     {
         List<Map<String, Object>> findings = new ArrayList<Map<String, Object>>();
 
+        if (!outcome.headBundles.isEmpty())
+        {
+            // Ranked first because it changes how every duplication number here should be
+            // read - the file is probably build output, and the ratio is describing a release
+            // process. Not excluded: the same shape is a module somebody copied wholesale.
+            DuplicateDetector.BundleSuspect worst = outcome.headBundles.get(0);
+            Map<String, Object> params = new LinkedHashMap<String, Object>();
+            params.put("file", worst.path);
+            params.put("dupLines", worst.dupLines);
+            params.put("fileLines", worst.fileLines);
+            params.put("partners", worst.partners);
+            params.put("others", outcome.headBundles.size() - 1);
+            StringBuilder examples = new StringBuilder();
+            for (String example : worst.examples)
+            {
+                examples.append(examples.length() > 0 ? ", " : "").append(example);
+            }
+            params.put("examples", examples.toString());
+            findings.add(finding(Thresholds.WARN, "bundleFile", params, worst.path));
+        }
+
         DuplicateDetector.CloneHit crossFile = null;
         int crossFileCount = 0;
         for (DuplicateDetector.CloneHit hit : outcome.headClones)
@@ -969,8 +990,9 @@ public final class ReportBuilder
     }
 
     private static final List<String> FINDING_PRIORITY = java.util.Arrays.asList(
-            "crossFileClone", "cloneConcentration", "busFactor", "identitySuspects",
-            "churnSpike", "copyPasteHigh", "errorHandling", "connectivityDrift");
+            "bundleFile", "crossFileClone", "cloneConcentration", "busFactor",
+            "identitySuspects", "churnSpike", "copyPasteHigh", "errorHandling",
+            "connectivityDrift");
 
     private static int priority(String code)
     {
