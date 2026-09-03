@@ -24,6 +24,28 @@
     var API = contextPath() + '/rest/code-quality/1.0/repos';
 
     /**
+     * True when this is the macro browser's preview pane.
+     *
+     * <p>The preview renders in an iframe the macro browser creates as
+     * {@code name="macro-browser-preview-frame"}, and our script runs inside it against the
+     * same session - so the Delete button in a preview really deletes. That alone settles what
+     * a preview should contain. It also answers the reasonable complaint that a preview has no
+     * business showing when the last analysis ran: what the parameter controls is which
+     * repositories appear, and that is what the preview is for.</p>
+     */
+    var IN_MACRO_PREVIEW = (function () {
+        try {
+            if (window.name === 'macro-browser-preview-frame') {
+                return true;
+            }
+            return !!(window.frameElement && window.frameElement.id === 'macro-preview-iframe');
+        } catch (ignored) {
+            // A cross-origin frame cannot be asked; the page rendering is the safe default.
+            return false;
+        }
+    }());
+
+    /**
      * Does this repository answer to what the macro was told to show?
      *
      * The macro's `repository` parameter used to be compared to the stored name exactly, so a
@@ -312,20 +334,28 @@
 
     App.prototype.renderTable = function () {
         var self = this;
-        var cols = el('colgroup', null, ['name', 'url', 'sync', 'status', 'actions']
-            .map(function (name) {
-                return el('col', { 'class': 'cq-col-' + name });
-            }));
-        var head = el('thead', null, [el('tr', null, [
+        // Two columns in the preview, five on a page - see renderPreviewRow.
+        var columns = IN_MACRO_PREVIEW
+            ? ['name', 'url']
+            : ['name', 'url', 'sync', 'status', 'actions'];
+        var cols = el('colgroup', null, columns.map(function (name) {
+            return el('col', { 'class': 'cq-col-' + name });
+        }));
+        var headings = [
             el('th', { text: text('ui.header.name') }),
-            el('th', { text: text('ui.header.url') }),
-            el('th', { text: text('ui.header.lastSync') }),
-            el('th', { text: text('ui.header.status') }),
-            el('th', { text: text('ui.header.actions'), style: 'text-align:right' })
-        ])]);
+            el('th', { text: text('ui.header.url') })
+        ];
+        if (!IN_MACRO_PREVIEW) {
+            headings.push(el('th', { text: text('ui.header.lastSync') }));
+            headings.push(el('th', { text: text('ui.header.status') }));
+            headings.push(el('th', {
+                text: text('ui.header.actions'), style: 'text-align:right'
+            }));
+        }
+        var head = el('thead', null, [el('tr', null, headings)]);
 
         var body = el('tbody', null, this.repos.map(function (repo) {
-            return self.renderRow(repo);
+            return IN_MACRO_PREVIEW ? self.renderPreviewRow(repo) : self.renderRow(repo);
         }));
 
         var children = [
@@ -356,7 +386,7 @@
         }
 
         var bar = [];
-        if (CAN_MANAGE) {
+        if (CAN_MANAGE && !IN_MACRO_PREVIEW) {
             bar.push(el('button', {
                 'class': 'cq-btn cq-btn-primary',
                 type: 'button',
@@ -373,11 +403,31 @@
         }
         children.push(el('p', {
             'class': 'cq-note',
-            text: CAN_MANAGE ? text('ui.deterministic')
-                : text('ui.deterministic') + ' ' + text('ui.adminOnly')
+            text: IN_MACRO_PREVIEW ? text('ui.previewNote')
+                : (CAN_MANAGE ? text('ui.deterministic')
+                    : text('ui.deterministic') + ' ' + text('ui.adminOnly'))
         }));
 
         return el('div', { 'class': 'cq-panel' }, children);
+    };
+
+    /**
+     * One row as the preview shows it: which repository, and where it is cloned from.
+     *
+     * <p>No actions, because a live Delete button in a preview is a hazard rather than a
+     * feature, and no last-analysed time or status, because neither is something the macro's
+     * parameters decide. The preview answers "which repositories will this show", which is the
+     * only question the dialog can change the answer to.</p>
+     */
+    App.prototype.renderPreviewRow = function (repo) {
+        var nameCell = [el('span', { 'class': 'cq-name', text: repo.name })];
+        if (repo.branch) {
+            nameCell.push(el('span', { 'class': 'cq-branch', text: repo.branch }));
+        }
+        return el('tr', null, [
+            el('td', null, nameCell),
+            el('td', { 'class': 'cq-url', title: repo.url, text: repo.url })
+        ]);
     };
 
     App.prototype.renderRow = function (repo) {

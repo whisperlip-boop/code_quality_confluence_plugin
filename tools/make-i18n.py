@@ -81,6 +81,13 @@ MESSAGES = [
     # Registered-but-filtered-out and nothing-registered used to render identically, so a
     # macro whose repository parameter matched nothing announced that no repository existed -
     # with three of them in the table one click away.
+    # Shown only inside the macro browser preview, where the buttons are deliberately absent:
+    # the preview runs against the live session, so a Delete there would really delete.
+    ("cq.ui.previewNote",
+     "Preview of which repositories this macro will show. The analyse, report, edit and delete "
+     "actions appear on the saved page.",
+     "이 매크로가 어떤 레포지터리를 표시할지 미리 보는 화면이다. 분석·리포트·편집·삭제는 "
+     "저장된 페이지에서 나타난다."),
     ("cq.ui.filterNoMatch",
      "No repository matches \u201c{0}\u201d. {1} registered.",
      "\u201c{0}\u201d와(과) 일치하는 레포지터리가 없다. 등록된 것은 {1}개다."),
