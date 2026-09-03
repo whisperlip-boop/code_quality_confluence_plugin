@@ -503,22 +503,49 @@ opening the dialog shows that.
 
 ## Where to pick this up
 
-Everything from both code reviews is closed, and so are the three follow-up steps. What is left
-is one unverified fix and two known limitations - no open defects.
+Everything from both code reviews is closed, and so are the three follow-up steps. The macro
+preview is now verified end to end against the running instance. Two known limitations remain
+and there are no open defects.
 
-**Unverified, and the reason to look first.** The macro preview went through three attempts:
-stale, then racing, and now refreshing once when the dropdown closes with polling off inside
-the preview. The first two were confirmed wrong on the live instance; **this one has not been
-confirmed right**. Open the macro dialog after a hard reload and tick two boxes: the preview
-should settle on two rows and stay there. If it still flickers or lands short, the next thing
-to try is dropping the automatic refresh entirely and letting the Refresh link do it - stale
-beats wrong, and that is the whole lesson of this round.
+**Read this before believing any screen.** Re-installing the same plugin version leaves the
+browser running the previous build's JavaScript, and reloading does not fix it. Confluence keys
+web-resource URLs on the plugin version and the resource list, not on their content, and serves
+them as immutable - so a rebuilt `1.0.0` arrives at an unchanged URL and the cached copy stands.
+The macro browser's preview frame is worse: it is created by script after the page loads, so
+even Ctrl+Shift+R cannot dislodge the copy inside it. Three rounds of preview fixes were
+reported as not working while the deployed code was correct. `deploy.sh` now appends a build
+timestamp to the reported version through `${cq.build.qualifier}`, which changes the URL on
+every deploy; the pom still says `1.0.0` and a release build without that property is unchanged.
+Confirmed by deploying twice and watching the URL hash move.
 
-Also worth confirming in the same pass: the page no longer offers Delete (3-A), the preview
-note now says deleting lives on the administration screen, and a repository whose stored name
-was hand-typed displays as `owner/repo`. That last one cannot be seen on this instance any more
-because `captureV`, the only such row, was deleted during testing - re-register it to see it,
-and note that a fresh registration derives its name so the difference will not reappear.
+**The preview no longer asks for a render.** It used to work by clicking Confluence's Refresh
+link, which starts a server round trip that overwrites the whole frame. Confluence starts its
+own on dialog open, two can be in flight, the later to finish wins with whatever value it
+captured, and a field has no way to make its own request be the last write - that is what showed
+two repositories and then one. Now `code-quality.js` exports `CqApp.repaint` and the dialog,
+which is the frame's parent and same-origin, redraws it directly: no request, ordered by
+construction, instant on every tick. And it binds Confluence's own
+`macro-browser.preview-ready`, so whatever HTML lands last is immediately brought back in line
+with what is ticked. Racing is now harmless instead of merely unlikely. The Refresh-link path
+survives as the fallback for the one case a repaint cannot cover - an insert whose required
+parameter has been empty has no frame to paint into, because Confluence removes it.
+
+**`tools/macro-dialog-probe.js` is how any of this was established, and how to check it again.**
+It drives the real dialog over CDP - Chrome plus Node's built-in WebSocket, nothing installed -
+ticks the real boxes, and prints what the frame holds after each one plus every render request
+that went out. Screenshots cannot see this and three rounds of reasoning got it wrong; the probe
+found it in one run. It runs with the cache off by default, deliberately. What it reports now:
+
+    edit, one repository stored     tick -> two rows at once, no server render
+                                    untick -> one row, untick both -> none
+    insert, nothing stored          no frame until the dropdown closes, then one
+                                    render with the right value and the right row
+
+Also confirmed in the same pass: the page no longer offers Delete (3-A), and the preview note
+says deleting lives on the administration screen. A repository whose stored name was hand-typed
+displays as `owner/repo` - that cannot be seen on this instance any more because `captureV`, the
+only such row, was deleted during testing, and a fresh registration derives its name so the
+difference will not reappear.
 
 ## Next, in order
 
@@ -542,6 +569,15 @@ when the dialog opens and when the Refresh link is clicked, and nothing else rea
 field's `change` event does not. So ticking a box left the preview showing the state from
 before the tick. Also worth knowing: while a required parameter is empty, `previewMacro` clears
 the pane and returns without rendering, which is the blank pane the reporter first saw.
+
+Three attempts went into this before the frame was measured rather than reasoned about. Stale
+was the first; refreshing per tick was the second and was worse, because it raced Confluence's
+own render and the preview went correct and then short; refreshing once on close was the third
+and narrowed the window without closing it. The fourth stopped asking for renders altogether -
+see **Where to pick this up**. Two lessons worth keeping: *correct and then wrong is a worse
+failure than stale*, and *a fix that introduces a race to remove a delay is not an improvement*.
+A third, harder-won: when a fix looks undeployed, check what the browser is actually running
+before changing the code again.
 
 Refreshing on every tick made it worse rather than better: the list appeared correct and then
 changed to a shorter one - two selected showed two rows and then one - because a render started

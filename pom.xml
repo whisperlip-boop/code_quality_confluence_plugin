@@ -152,6 +152,16 @@
         <!-- Last JGit line that still targets Java 8, which Confluence 7.x runs on. -->
         <jgit.version>5.13.3.202401111512-r</jgit.version>
         <atlassian.plugin.key>${project.groupId}.${project.artifactId}</atlassian.plugin.key>
+        <!--
+            Appended to the version the plugin reports. Confluence keys its web-resource URLs on
+            that version and serves them as immutable, so re-installing the same version leaves
+            every browser holding the previous build's JavaScript at an unchanged URL - and a
+            reload cannot dislodge the copy inside the macro browser's preview frame, because
+            that frame is built by script after the page has loaded and its fetch is an ordinary
+            cacheable one. deploy.sh sets this to the build time; a release build leaves it
+            empty and the version stays exactly what the pom says.
+        -->
+        <cq.build.qualifier/>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>

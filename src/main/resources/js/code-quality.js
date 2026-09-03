@@ -315,6 +315,9 @@
         this.only = (root.getAttribute('data-only') || '').trim();
         this.heading = (root.getAttribute('data-title') || '').trim();
         this.repos = [];
+        /** Every repository the server offered, before this macro's selection narrowed it. */
+        this.all = [];
+        this.loaded = false;
         /** Every name the server offered, before this macro's filter narrowed it. */
         this.available = [];
         this.editing = null;
@@ -337,21 +340,62 @@
         return request('GET', API).then(function (payload) {
             STRINGS = payload.strings || STRINGS;
             CAN_MANAGE = !!payload.canManage;
-            self.repos = payload.repos || [];
-            if (self.context !== 'admin') {
-                // Kept so the empty case can say what it filtered and out of how many, which
-                // is the difference between "you asked for something that is not here" and
-                // "nothing is registered". Those used to look identical.
-                self.available = self.repos.map(function (repo) {
-                    return label(repo);
-                });
-                self.repos = self.repos.filter(function (repo) {
-                    return matchesSelection(repo, self.only);
-                });
-            }
+            self.all = payload.repos || [];
+            self.loaded = true;
+            self.narrow();
             self.render();
             self.schedulePoll();
         });
+    };
+
+    /**
+     * Applies this surface's selection to the list the server sent.
+     *
+     * <p>Split out from {@code load} so the selection can change without another round trip:
+     * which rows to show is a decision about a list already in hand.</p>
+     */
+    App.prototype.narrow = function () {
+        var self = this;
+        if (this.context === 'admin') {
+            this.repos = this.all;
+            return;
+        }
+        // Kept so the empty case can say what it filtered and out of how many, which is the
+        // difference between "you asked for something that is not here" and "nothing is
+        // registered". Those used to look identical.
+        this.available = this.all.map(function (repo) {
+            return label(repo);
+        });
+        this.repos = this.all.filter(function (repo) {
+            return matchesSelection(repo, self.only);
+        });
+    };
+
+    /**
+     * Shows a different selection immediately, without asking the server for anything.
+     *
+     * <p>The macro browser's preview is the caller. Its pane is filled by a server render that
+     * Confluence starts when the dialog opens and again on every click of its Refresh link, and
+     * every one of those writes into the same iframe with no ordering between them - so a field
+     * that asks for a render can only hope its own request is the last to land. Asking on every
+     * tick lost that race often enough to show two repositories and then one; asking once, when
+     * the dropdown closes, narrowed the window without closing it.</p>
+     *
+     * <p>Nothing about a selection change needs the server: the rows are already here and the
+     * choice only decides which of them to draw. Doing it locally is ordered by construction,
+     * costs one repaint, and is the same code path the first render took - so the preview cannot
+     * disagree with the saved page.</p>
+     */
+    App.prototype.applySelection = function (selection) {
+        this.only = String(selection === undefined || selection === null ? '' : selection)
+            .trim();
+        // Before the list arrives there is nothing to redraw, and the pending load will filter
+        // with the value set here.
+        if (this.loaded) {
+            this.narrow();
+            this.render();
+        }
+        return true;
     };
 
     App.prototype.render = function () {
@@ -893,9 +937,35 @@
         for (var i = 0; i < roots.length; i++) {
             if (!roots[i].getAttribute('data-cq-mounted')) {
                 roots[i].setAttribute('data-cq-mounted', '1');
-                new App(roots[i]).start();
+                // Kept on the element so a repaint can reach the instance that owns it.
+                roots[i].cqApp = new App(roots[i]);
+                roots[i].cqApp.start();
             }
         }
+    }
+
+    /**
+     * Redraws every macro on this page for a new selection. Returns how many were redrawn.
+     *
+     * <p>Called from the macro browser dialog, which is the parent of the preview frame - see
+     * {@code App.applySelection} for why the dialog repaints rather than asking for a render.
+     * The administration screen is skipped: its list is the whole registry by definition, and a
+     * macro parameter has no business narrowing it.</p>
+     */
+    function repaint(selection) {
+        var roots = document.querySelectorAll('.cq-app');
+        var painted = 0;
+        for (var i = 0; i < roots.length; i++) {
+            var app = roots[i].cqApp;
+            if (!app || app.context === 'admin') {
+                continue;
+            }
+            roots[i].setAttribute('data-only', selection === null
+                || selection === undefined ? '' : selection);
+            app.applySelection(selection);
+            painted++;
+        }
+        return painted;
     }
 
     /**
@@ -925,6 +995,13 @@
 
     // Exported so RepoMatchTest can pin the matcher against this file rather than against a
     // copy of it - a copy is what drifts. Nothing on the page reads it.
+    // The dialog's own script reaches the preview through this - a same-origin frame, so the
+    // parent can call in. Absent means an older copy of this file, and the caller falls back to
+    // asking Confluence for a render.
+    global.CqApp = {
+        repaint: repaint
+    };
+
     global.CqRepoMatch = {
         identifies: identifies,
         label: label,

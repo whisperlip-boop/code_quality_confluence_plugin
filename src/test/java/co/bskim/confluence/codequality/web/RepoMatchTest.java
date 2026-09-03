@@ -141,6 +141,23 @@ public class RepoMatchTest
         assertDoesNotMatch("captureV", "a different repository");
     }
 
+    /**
+     * The hook the macro browser dialog paints the preview through.
+     *
+     * <p>Not a detail: when it is missing the dialog falls back to asking Confluence for a
+     * server render, and that is the path whose ordering cannot be relied on - two renders in
+     * flight, the later to finish wins, and the preview showed two repositories and then one.
+     * The fallback exists for an older copy of this file in a cached frame, not for this
+     * build, so a build that loses the export must fail here rather than quietly go back to
+     * racing.</p>
+     */
+    @Test
+    public void theDialogsRepaintHookIsExported() throws Exception
+    {
+        assertEquals("the dialog paints the preview through this", "function",
+                engine.eval("typeof window.CqApp.repaint"));
+    }
+
     /** A repository with no URL - not expected, but it must not throw. */
     @Test
     public void survivesAMissingUrl() throws Exception

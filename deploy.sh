@@ -13,7 +13,12 @@ PASS="${CONFLUENCE_PASS:?CONFLUENCE_PASS 환경변수에 관리자 비밀번호�
 KEY="co.bskim.confluence.code-quality"
 
 export JAVA_HOME="${JAVA_HOME:-/usr/lib/jvm/java-8-openjdk-amd64}"
-/opt/atlassian-plugin-sdk/bin/atlas-mvn -B -q clean package -DskipTests
+# 같은 버전을 다시 설치하면 웹 리소스 URL이 그대로여서 브라우저가 이전 빌드의 JS를 계속 쓴다.
+# 매크로 브라우저 미리보기 프레임은 페이지 로드 후 스크립트가 만들기 때문에 강제 새로 고침으로도
+# 지워지지 않는다. 그래서 배포마다 버전에 빌드 시각을 붙여 URL을 바꾼다.
+QUALIFIER=".$(date -u +%Y%m%d%H%M%S)"
+/opt/atlassian-plugin-sdk/bin/atlas-mvn -B -q clean package -DskipTests \
+    "-Dcq.build.qualifier=$QUALIFIER"
 
 JAR="$(ls -t target/*.jar | grep -v '\-tests' | head -1)"
 echo "업로드 대상: $JAR → $BASE"

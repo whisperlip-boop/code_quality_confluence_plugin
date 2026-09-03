@@ -50,6 +50,55 @@ define('code-quality/macro-browser-overrides',
                 : String(ref) === String(repo.name);
         }
 
+        /** The live value of our parameter, or null when our macro's form is not loaded. */
+        function currentSelection() {
+            var $input = $('#macro-param-repository');
+            return $input.length ? $input.val() : null;
+        }
+
+        /**
+         * Shows the current selection in the preview without a server render.
+         *
+         * <p>The preview frame is same-origin and holds our own script, so the dialog can tell
+         * it which repositories to draw directly - see {@code App.applySelection} in
+         * code-quality.js for why that is better than asking Confluence to render again.
+         * Returns false when there is nothing to paint into, which is the signal to fall back
+         * to the Refresh link: an empty required parameter makes Confluence skip the render
+         * altogether and remove the frame, so the first selection of an insert has no frame to
+         * paint.</p>
+         */
+        function paintPreview() {
+            var selection = currentSelection();
+            if (selection === null) {
+                return false;
+            }
+            try {
+                var frame = document.getElementById('macro-preview-iframe');
+                var view = frame && frame.contentWindow;
+                if (view && view.CqApp && typeof view.CqApp.repaint === 'function') {
+                    return view.CqApp.repaint(selection) > 0;
+                }
+            } catch (ignored) {
+                // A frame mid-navigation refuses to be read. The Refresh link still works.
+            }
+            return false;
+        }
+
+        /*
+         * Correct every render after it lands, whoever started it.
+         *
+         * Confluence renders the preview when the dialog opens and on every click of its
+         * Refresh link, and each render writes the whole frame. Two can be in flight at once,
+         * the later to finish wins, and neither carries a promise about which parameter values
+         * it captured - which is how the preview came to show two repositories and then one.
+         * This fires on Confluence's own preview-ready event, so whatever HTML lands last is
+         * immediately brought in line with what is ticked. Racing is then harmless rather than
+         * merely unlikely.
+         */
+        AJS.bind('macro-browser.preview-ready', function () {
+            paintPreview();
+        });
+
         function repositoryField(param) {
             var $container = $(Templates.MacroBrowser.macroParameter());
             // The template's input stays in the DOM and holds the value: it is what the dialog
@@ -95,19 +144,19 @@ define('code-quality/macro-browser-overrides',
             var refreshedValue = null;
 
             /**
-             * Redraws the preview, once, when the choosing is finished.
+             * Asks Confluence for a render, once, when the choosing is finished.
              *
-             * <p>Confluence refreshes the preview when the dialog opens and when somebody
-             * clicks the Refresh link, and at no other time - a field's change event does not
-             * reach it. So ticking a box left the preview showing the state from before the
-             * tick.</p>
+             * <p>The fallback for the one case a repaint cannot cover: while the required
+             * Repository parameter is empty Confluence skips the render and removes the preview
+             * frame, so an insert has no frame to paint into until one render has happened.
+             * Once it has, {@code paintPreview} takes over and this stays quiet.</p>
              *
-             * <p>Refreshing on every tick instead produced something worse: the list appeared
-             * correct and then changed to a shorter one, because a render triggered per
-             * keystroke-equivalent races the one Confluence starts itself and the last to
-             * finish wins with whatever value it captured. Two selected showed two rows and
-             * then one. So this runs when the dropdown closes, which is when the selection is
-             * actually complete, and only if the value has changed since the last redraw.</p>
+             * <p>Guarded on the value because a render is a round trip whose result overwrites
+             * the frame - and it runs on close, not per tick, because the choosing is finished
+             * then. The old per-tick version is what taught us that: it raced the render
+             * Confluence starts itself and the preview showed two repositories and then one.
+             * That race is now reconciled rather than avoided - see the preview-ready binding -
+             * but there is still no reason to spend renders.</p>
              */
             function refreshPreview() {
                 var value = $input.val();
@@ -132,6 +181,11 @@ define('code-quality/macro-browser-overrides',
                 if (param.required && MacroBrowser.processRequiredParameters) {
                     MacroBrowser.processRequiredParameters();
                 }
+                // Every tick, because a repaint is a local redraw: no request, nothing to
+                // race, and the preview stops lagging a step behind the boxes.
+                if (paintPreview()) {
+                    refreshedValue = $input.val();
+                }
             }
 
             function open() {
@@ -143,7 +197,10 @@ define('code-quality/macro-browser-overrides',
             function close() {
                 $panel.prop('hidden', true);
                 $trigger.attr('aria-expanded', 'false');
-                refreshPreview();
+                // Ticking has already painted; this covers the frame that was never rendered.
+                if (!paintPreview()) {
+                    refreshPreview();
+                }
             }
 
             $trigger.on('click', function (event) {
@@ -229,6 +286,9 @@ define('code-quality/macro-browser-overrides',
                     MacroBrowser.processRequiredParameters();
                 }
                 refreshedValue = $input.val();
+                // The dialog rendered its first preview from the raw stored value while this
+                // list was still loading; paint so the frame agrees with the normalised one.
+                paintPreview();
             }
 
             $trigger.text(strings('ui.loading', 'Loading...'));
