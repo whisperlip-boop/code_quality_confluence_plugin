@@ -38,6 +38,11 @@ define('code-quality/macro-browser-overrides',
             });
         }
 
+        /** What the row shows. Derived by the server so every screen agrees - see the DTO. */
+        function label(repo) {
+            return repo.label || repo.name;
+        }
+
         /** Does a stored reference - a name, an id, a URL - point at this repository? */
         function identifies(repo, ref) {
             return window.CqRepoMatch
@@ -74,7 +79,10 @@ define('code-quality/macro-browser-overrides',
                     return strings('ui.pickNone', 'Choose repositories\u2026');
                 }
                 if (names.length === 1) {
-                    return names[0];
+                    var only = repos.filter(function (repo) {
+                        return repo.name === names[0];
+                    })[0];
+                    return only ? label(only) : names[0];
                 }
                 return names.length + ' ' + strings('ui.selectedSuffix', 'selected');
             }
@@ -84,17 +92,43 @@ define('code-quality/macro-browser-overrides',
                 return loaded[key] || fallback;
             }
 
+            var refreshTimer = null;
+
+            /**
+             * Redraws the preview after a change.
+             *
+             * <p>Confluence refreshes the preview when the dialog opens and when somebody
+             * clicks the Refresh link, and at no other time - a field's change event does not
+             * reach it. Ticking a box therefore left the preview showing the state from before
+             * the tick, which reads as "I chose one and the preview went blank". Clicking
+             * Confluence's own link is used rather than calling previewMacro directly, so the
+             * spinner, the required-parameter check and the error handling stay theirs.</p>
+             */
+            function refreshPreview() {
+                if (refreshTimer !== null) {
+                    window.clearTimeout(refreshTimer);
+                }
+                refreshTimer = window.setTimeout(function () {
+                    refreshTimer = null;
+                    var $link = $('#macro-browser-preview-link');
+                    if ($link.length && !$link.prop('disabled')) {
+                        $link.click();
+                    }
+                }, 250);
+            }
+
             function publish() {
                 var names = chosenNames();
                 $input.val(names.join(','));
                 $trigger.text(describe(names));
                 $trigger.toggleClass('cq-picker-empty', names.length === 0);
-                // Tell the dialog the field changed, so Save and the preview refresh follow the
-                // checkboxes rather than a hidden input nobody typed into.
                 $input.trigger('change');
+                // Order matters: the required check enables the Refresh link, and the refresh
+                // is a no-op while it is disabled.
                 if (param.required && MacroBrowser.processRequiredParameters) {
                     MacroBrowser.processRequiredParameters();
                 }
+                refreshPreview();
             }
 
             function open() {
@@ -161,7 +195,7 @@ define('code-quality/macro-browser-overrides',
                 repos.forEach(function (repo) {
                     var $row = $('<label class="cq-picker-row"></label>')
                         .attr('data-search',
-                            (repo.name + ' ' + repo.url).toLowerCase());
+                            (label(repo) + ' ' + repo.name + ' ' + repo.url).toLowerCase());
                     var $box = $('<input type="checkbox">').val(repo.name);
                     // A macro saved before this picker existed may hold an id or a URL, so a
                     // box is ticked when the stored value identifies this repository by any
@@ -173,15 +207,22 @@ define('code-quality/macro-browser-overrides',
                     }
                     $box.on('change', publish);
                     $row.append($box);
-                    $row.append($('<span class="cq-picker-name"></span>').text(repo.name));
+                    $row.append($('<span class="cq-picker-name"></span>').text(label(repo)));
                     $row.append($('<span class="cq-picker-url"></span>').text(repo.url));
                     $rows.append($row);
                 });
                 $panel.append($rows);
 
-                // Normalised on load, so a stored id or URL becomes the names the boxes carry
-                // and what is saved matches what is on screen.
-                publish();
+                // Normalised on load, so a stored id or URL becomes the names the boxes
+                // carry and what is saved matches what is on screen. No refresh: the dialog is
+                // rendering its own first preview at this moment.
+                var names = chosenNames();
+                $input.val(names.join(','));
+                $trigger.text(describe(names));
+                $trigger.toggleClass('cq-picker-empty', names.length === 0);
+                if (param.required && MacroBrowser.processRequiredParameters) {
+                    MacroBrowser.processRequiredParameters();
+                }
             }
 
             $trigger.text(strings('ui.loading', 'Loading...'));

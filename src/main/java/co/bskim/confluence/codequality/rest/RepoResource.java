@@ -346,6 +346,13 @@ public class RepoResource
         Map<String, Object> dto = new LinkedHashMap<String, Object>();
         dto.put("id", repo.id);
         dto.put("name", repo.name);
+        // What every screen displays. Derived from the URL rather than taken from the stored
+        // name, because the stored names come in two shapes: registrations from when the form
+        // had a Name field carry whatever was typed, and everything since is owner/repo. One
+        // table showing "captureV" beside "whisperlip-boop/dept_calendar" invites exactly the
+        // question of which form is which - so the display is computed in one place and the
+        // stored name stays what the macro parameter matches on.
+        dto.put("label", label(repo));
         dto.put("url", repo.url);
         dto.put("branch", repo.branch);
         dto.put("authUser", repo.authUser);
@@ -369,6 +376,13 @@ public class RepoResource
      * to a GitHub repository anyway. Handles scp-style remotes and strips any credentials that
      * were pasted into the URL.</p>
      */
+    /** {@code owner/repo} where the URL yields one, and the stored name where it does not. */
+    private static String label(RepoSnapshot repo)
+    {
+        String derived = deriveName(repo.url);
+        return derived == null || derived.isEmpty() ? repo.name : derived;
+    }
+
     static String deriveName(String url)
     {
         String cleaned = url.trim();

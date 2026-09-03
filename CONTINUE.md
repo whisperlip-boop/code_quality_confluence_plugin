@@ -501,6 +501,25 @@ opening the dialog shows that.
    only the first 16 are paired and duplication is understated. It is deterministic - the walk
    is in path order - and pre-existing, but it is a real ceiling on very repetitive trees.
 
+### Two things the picker exposed
+
+**Names were displayed inconsistently, and the display is now computed in one place.** A
+registration made when the form still had a Name field carries whatever was typed; everything
+since is `owner/repo` derived from the URL. One table showing `captureV` beside
+`whisperlip-boop/dept_calendar` invites the question of which form anything wants, so the REST
+DTO carries a `label` derived from the URL and every screen shows that. The stored `name` is
+untouched and is still what the macro parameter matches on - changing stored data to fix a
+display would break the macros that reference it.
+
+**Confluence does not refresh the macro preview when a field changes.** `previewMacro` runs
+when the dialog opens and when the Refresh link is clicked, and nothing else reaches it - a
+field's `change` event does not. So ticking a box left the preview showing the state from
+before the tick, which reads as "I chose one and the preview went blank". The picker now clicks
+Confluence's own Refresh link, debounced, rather than calling `previewMacro` directly, so the
+spinner, the required-parameter check and the error handling stay theirs. Also worth knowing:
+while a required parameter is empty, `previewMacro` clears the pane and returns without
+rendering.
+
 ## Things worth knowing before touching the code
 
 - **A browser tab opened before a deploy runs the old JavaScript.** Confluence content-hashes

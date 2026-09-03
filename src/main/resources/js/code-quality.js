@@ -65,6 +65,11 @@
      * a full list before any choice had been made. The administration screen is the exception -
      * see {@code data-context} - because listing everything is what that screen is for.</p>
      */
+    /** What every screen shows for a repository. The server derives it; this is the guard. */
+    function label(repo) {
+        return repo.label || repo.name;
+    }
+
     function matchesSelection(repo, selection) {
         var refs = String(selection === undefined || selection === null ? '' : selection)
             .split(',');
@@ -338,7 +343,7 @@
                 // is the difference between "you asked for something that is not here" and
                 // "nothing is registered". Those used to look identical.
                 self.available = self.repos.map(function (repo) {
-                    return repo.name;
+                    return label(repo);
                 });
                 self.repos = self.repos.filter(function (repo) {
                     return matchesSelection(repo, self.only);
@@ -450,7 +455,7 @@
      * only question the dialog can change the answer to.</p>
      */
     App.prototype.renderPreviewRow = function (repo) {
-        var nameCell = [el('span', { 'class': 'cq-name', text: repo.name })];
+        var nameCell = [el('span', { 'class': 'cq-name', text: label(repo) })];
         if (repo.branch) {
             nameCell.push(el('span', { 'class': 'cq-branch', text: repo.branch }));
         }
@@ -505,13 +510,13 @@
         }
         if (CAN_MANAGE) {
             actions.push(iconButton('delete', text('ui.delete'), function () {
-                if (window.confirm(text('ui.confirmDelete', [repo.name]))) {
+                if (window.confirm(text('ui.confirmDelete', [label(repo)]))) {
                     self.remove(repo);
                 }
             }, { danger: true }));
         }
 
-        var nameCell = [el('span', { 'class': 'cq-name', text: repo.name })];
+        var nameCell = [el('span', { 'class': 'cq-name', text: label(repo) })];
         if (repo.branch) {
             nameCell.push(el('span', { 'class': 'cq-branch', text: repo.branch }));
         }
@@ -913,6 +918,7 @@
     // copy of it - a copy is what drifts. Nothing on the page reads it.
     global.CqRepoMatch = {
         identifies: identifies,
+        label: label,
         matchesSelection: matchesSelection,
         normaliseRef: normaliseRef,
         ownerAndRepo: ownerAndRepo
