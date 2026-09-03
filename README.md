@@ -207,7 +207,7 @@ as ISO-8859-1, so Korean has to be `\uXXXX` escaped. Edit `tools/make-i18n.py`, 
 atlas-mvn test
 ```
 
-Twenty-one of them, and they exist because the numbers are the product. Six pin the copy-paste
+Twenty-four of them, and they exist because the numbers are the product. Six pin the copy-paste
 classifier: scattered language idioms must not count as copying (the case that made the first
 version report 13.7%), a block copied across files, a move within a file, a move across files, a
 copy whose source survived, and **classification independent of the order files entered the
@@ -227,6 +227,12 @@ pinned deliberately, so a later hardening pass cannot quietly close the main use
 Four clone real repositories over the local transport to pin that the clone follows the URL. Two
 of them fail against the unfixed code; the other two guard the opposite mistake, discarding a
 clone that was still good.
+
+Three walk every finding and caveat the report can emit, in every language, asserting that none
+comes out holding an unfilled `{0}`. The wording lives in three places that have to agree - the
+code the builder emits, the argument list keyed off it, and the message in each bundle - and
+nothing connects them at compile time: adding a finding without its argument list put
+"bus factor {0}, across {1} author(s)" on the page while everything built and rendered.
 
 ## Verification tools
 

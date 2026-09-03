@@ -55,7 +55,7 @@ administrators see them.** Link a space to give a team access.
   commit whose cached row has no statics.
 - `STATIC_SAMPLE_TARGET` said 40 while the call site used 40x5; it is 200 and used directly.
 
-### A-3 — tests exist now (21, all green)
+### A-3 — tests exist now (24, all green)
 
 `CopyPasteClassifierTest` (6): scattered idioms are not copies (the case that made v1 report
 13.7%), a six-line block copied across files, a move within a file, a move across files, a copy
@@ -125,6 +125,38 @@ probably why it went unnoticed.
 Verified on the running instance as well as in tests: repository 1 re-pointed from `captureV` to
 this plugin's own repository moved from head `4ddb39e8` to `c210c7a9`, and back again.
 
+### Display coherence - C-1 to C-11, all closed
+
+Ten of them (C-6 was already done). None of these were wrong arithmetic; every one was the page
+saying something the data does not support, which is worse, because it looks like a measurement.
+
+| Item | Was | Is |
+|---|---|---|
+| C-1 | "+42.9%" in large type above a chip reading "no change" - the noise floor stopped the verdict, not the number | The percentage is emitted only when it clears the floor and has a baseline. The absolute change stays on the chip. |
+| C-2 | A baseline of 0 duplicated lines made any growth "+100%"; a baseline of 0 calls/KLOC scored an undefined 0% as **good** | Undefined is UNKNOWN. Direction is still reported from the absolute change. |
+| C-3 | Legacy boxes printed "0.0%" with no baseline - "measured, did not move" | A dimmed em-dash, titled "no comparable baseline". Deltas are boxed `Double` so null survives to the JSON. |
+| C-4 | "vs 90d ago" on a baseline 300 days old, whenever no sample fell inside the window | `referenceDays` - the real gap. Reads "19일 전 대비" on the reference repository. |
+| C-5 | Graded on the ratio while showing only a line count, so the verdict could not be checked | The ratio sits under the figure: "HEAD 코드의 1.34%". |
+| C-7 | `dupDeltaWarn`/`dupDeltaCrit` were dead settings; +21 lines and +30,000 lines earned the same badge | `stateDupDelta` now feeds the grade. |
+| C-8 | The tile said "412 clone pairs" and the table said "412" while listing 60 | "클론 412쌍 중 60쌍". Verified with a synthetic 412/60 report. |
+| C-9 | One uncensored commit in a bucket of 54 drew a solid bar | Partial buckets are drawn faded over the censored hatch, and say "커밋 6개 중 2개 집계". |
+| C-10 | Churn silently dropped every commit whose window was open | "관측 창 안의 커밋 4개 제외" under the figure. |
+| C-11 | The bus-factor finding always claimed identity merging was doing work, including at 3 authors / 3 identities | A second code, `busFactorClean`, for when nothing was merged. |
+
+Two things came out of doing this rather than out of the review.
+
+**C-7's fix reintroduced the problem C-1 fixed, one level up.** Grading the direction by percentage
+made captureV **critical**: 50 duplicated lines to 76 is +52%, and it is 26 lines. A percentage
+may now only raise the alarm when the lines behind it are worth one - `dupDeltaCritLines`, 20x the
+detector's minimum clone. It caps at warn below that. The floor stops a small base from inventing
+a direction; this stops it from inventing a severity.
+
+**A finding code with no argument list published raw `{0}` placeholders to the page** and nothing
+failed - the report built, the page rendered, the sentence was simply wrong. `findingArgs` now
+throws on an unknown code, and `ReportLocalizerTest` walks every code the builder can emit in
+every language, asserting no unfilled placeholder and no bare message key. It fails against the
+unfixed code on exactly that string.
+
 ## Next, in order
 
 1. **Java and JS thresholds.** Measured but withheld:
@@ -147,9 +179,9 @@ this plugin's own repository moved from head `4ddb39e8` to `c210c7a9`, and back 
    generated tables brings the cohort into single digits; fastapi is still 25.1% and httpx 14.1%.
    Both look like real duplication, so the comment should change - but fastapi barely moved when
    `docs_src` was excluded and is worth a look.
-4. **C-1 to C-11, D-2 to D-6** from the review: display coherence and operational robustness.
-   C-6 (a hard-coded cohort size of 19 that would misreport a custom threshold's provenance) is
-   already fixed; the rest are open.
+4. **D-2 to D-6** from the review: operational robustness. Orphans left by deleting during a
+   run, up to 60 seconds blocking a request thread, the check-then-act race in `submit()`, no
+   ceiling on clone size, and an N+1 transaction behind the repository list.
 5. **E-3, E-4**: bulk-import detection may over-fire on a young repository; `ChurnTracker` prunes
    on the current commit's timestamp, so one future-dated commit empties it.
 
@@ -163,6 +195,12 @@ this plugin's own repository moved from head `4ddb39e8` to `c210c7a9`, and back 
 - The verification probes under `tools/` are `main` classes, not tests. `IncrementalProbe` has
   been superseded by `AnalysisEngineTest` and its `x.sampled() && y.sampled()` guard is the hole
   the review found; the tool still has it.
+- **Verifying the page needs a synthetic report.** The two registered repositories cannot
+  produce a truncated clone table, a mixed-censoring bucket or a missing baseline, so those
+  three fixes were checked by editing a report payload and rendering it with `tools/RenderProbe`
+  plus headless Chrome. Region shots: put an iframe at a negative `top` in a wrapper file next
+  to the rendered page (a `data:` URL cannot load a relative `src`) and pass
+  `--allow-file-access-from-files`.
 - Screenshots: WSL cannot run `.exe` files unless the `WSLInterop` binfmt handler is registered.
   It is now persisted in `/usr/lib/binfmt.d/WSLInterop.conf`, but `systemd-binfmt` is what
   removes it, so check `ls /proc/sys/fs/binfmt_misc/` if Chrome stops working.

@@ -353,6 +353,9 @@ MESSAGES = [
     ("cq.label.importExcluded", "bulk imports excluded", "일괄 반입 제외"),
     ("cq.label.tableView", "Show the numbers", "숫자로 보기"),
     ("cq.label.clones", "{0} clone pairs", "클론 {0}쌍"),
+    # The table is capped, so it names both numbers rather than repeating the total over a
+    # shorter list.
+    ("cq.label.clonesShown", "{0} of {1} clone pairs", "클론 {1}쌍 중 {0}쌍"),
     ("cq.label.why", "Why", "설명"),
     ("cq.label.language", "Language", "언어"),
     # Each language names itself, so the switcher reads correctly whichever one is active.
@@ -386,6 +389,17 @@ MESSAGES = [
      "Greyed points are still inside the 14-day window.",
      "회색 구간은 아직 14일 관측 창 안이다."),
     ("cq.label.delta", "vs {0}d ago", "{0}일 전 대비"),
+    # Shown where a change would be, when there is nothing to compare against. A "0.0%" there
+    # reads as "measured, and it did not move".
+    ("cq.label.noBaseline", "No comparable baseline", "비교 기준선 없음"),
+    # C-5: the tile is graded on the ratio, so the ratio has to be on the tile.
+    ("cq.label.dupShare", "{0}% of code at HEAD", "HEAD 코드의 {0}%"),
+    # C-10: churn excludes commits whose window has not closed. Saying how many keeps the
+    # denominator visible.
+    ("cq.label.churnCensored", "{0} commit(s) still inside the window",
+     "관측 창 안의 커밋 {0}개 제외"),
+    # C-9: a bucket where only part of the commits could be counted.
+    ("cq.label.bucketPartial", "{0} of {1} commits counted", "커밋 {1}개 중 {0}개 집계"),
     ("cq.label.window", "{0}-day window", "{0}일 창"),
     ("cq.label.showAll", "Show all", "전체 보기"),
     ("cq.label.showLess", "Show less", "접기"),
@@ -436,6 +450,16 @@ MESSAGES = [
      "both be wrong.",
      "{3}이(가) {4}개 커밋을 썼다. git은 {1}명을 identity {2}개로 보고했다. identity 병합이 "
      "이미 개입하고 있다는 뜻이고, 병합이 없으면 소유권과 bus factor가 둘 다 틀린다."),
+    # Emitted when git reported exactly as many identities as authors: the merged-identity
+    # sentence would be a claim about work that did not happen.
+    ("cq.finding.busFactorClean.title",
+     "Bus factor {0}, across {1} author(s)",
+     "bus factor {0}, 작성자 {1}명"),
+    ("cq.finding.busFactorClean.body",
+     "{3} accounts for {4} commits. Every author resolved to a single git identity, so this "
+     "count is what the history says without any merging applied.",
+     "{3}이(가) {4}개 커밋을 썼다. 작성자마다 git identity가 하나씩이라 병합 없이 나온 "
+     "수치 그대로다."),
     ("cq.finding.churnSpike.title",
      "{0} was {2}% rewritten within two weeks",
      "{0}이(가) 2주 안에 {2}% 다시 쓰였다"),

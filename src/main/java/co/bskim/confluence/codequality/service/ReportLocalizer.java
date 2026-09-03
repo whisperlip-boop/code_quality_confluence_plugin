@@ -53,7 +53,9 @@ public final class ReportLocalizer
             "authors.header.identities",
             "label.approximate", "label.censoredNote", "label.delta", "label.window",
             "label.showAll", "label.showLess", "label.noData", "label.importExcluded",
-            "label.tableView", "label.clones", "label.why", "label.hideWhy",
+            "label.tableView", "label.clones", "label.clonesShown", "label.why",
+            "label.hideWhy", "label.noBaseline", "label.dupShare", "label.churnCensored",
+            "label.bucketPartial",
             "label.findings", "label.language", "lang.ko", "lang.en"
     };
 
@@ -171,6 +173,9 @@ public final class ReportLocalizer
                         num(p, "delta", language), num(p, "windowDays", language)
                 };
             case "busFactor":
+            case "busFactorClean":
+                // Same arguments, two messages: the merged-identity sentence is only true when
+                // merging actually happened, so the code carries which one applies.
                 return new Object[] {
                         num(p, "busFactor", language), num(p, "authors", language),
                         num(p, "identities", language), str(p, "topName"),
@@ -192,7 +197,11 @@ public final class ReportLocalizer
                         num(p, "added", language), num(p, "refactorPct", language)
                 };
             default:
-                return new Object[0];
+                // A code with no case here reaches the reader as a raw "{0}". Making that a
+                // failure rather than a shrug is the only way it gets noticed before shipping:
+                // it is caught by ReportLocalizerTest, which walks every code the builder can
+                // emit.
+                throw new IllegalStateException("No argument list for finding code: " + code);
         }
     }
 

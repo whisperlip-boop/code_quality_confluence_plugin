@@ -201,7 +201,7 @@
     };
 
     /** Direction is its own verdict; it never borrows the level's badge. */
-    function directionChip(direction, deltaPct, deltaLines) {
+    function directionChip(direction, deltaLines) {
         var key = DIR_GLYPH[direction] ? direction : 'unknown';
         var label = t('dir.' + key);
         if (key === 'improving' || key === 'worsening') {
@@ -379,7 +379,7 @@
                 from: slice[0], to: slice[slice.length - 1], count: slice.length,
                 at: slice[slice.length - 1].at,
                 novel: 0, copied: 0, moved: 0, added: 0,
-                churn: 0, churnAdded: 0, censored: true
+                churn: 0, churnAdded: 0, censored: true, counted: 0
             };
             slice.forEach(function (commit) {
                 bucket.novel += commit.novel;
@@ -388,10 +388,15 @@
                 bucket.added += commit.added;
                 if (!commit.censored) {
                     bucket.censored = false;
+                    bucket.counted++;
                     bucket.churn += commit.churn;
                     bucket.churnAdded += commit.added;
                 }
             });
+            // One uncensored commit used to make the whole bucket count as observed, so a
+            // bucket of 54 with 53 windows still open was drawn as a solid bar. It is a real
+            // measurement of one commit, not of the bucket - drawn, but not as a full claim.
+            bucket.partial = bucket.counted > 0 && bucket.counted < bucket.count;
             bucket.churnPct = bucket.churnAdded > 0
                 ? bucket.churn / bucket.churnAdded * 100 : 0;
             buckets.push(bucket);
@@ -462,6 +467,18 @@
             ]);
         }
 
+        // What the tile is judged on but the headline number does not carry. Duplication is
+        // graded on the ratio while showing a line count, and churn drops every commit whose
+        // window is still open without saying how many that was.
+        var sub = null;
+        if (kpi.key === 'duplication' && kpi.detail
+                && kpi.detail.pct !== null && kpi.detail.pct !== undefined) {
+            sub = t('label.dupShare', [fmt(kpi.detail.pct, 2)]);
+        } else if (kpi.key === 'churn' && kpi.detail && kpi.detail.censored > 0) {
+            sub = t('label.churnCensored', [fmt(kpi.detail.censored, 0)]);
+        }
+        var subNode = sub ? h('div', { 'class': 'kpi-sub', text: sub }) : null;
+
         var note = h('p', { 'class': 'kpi-note', text: t('kpi.' + kpi.key + '.note'),
             hidden: true });
         var why = h('button', {
@@ -486,7 +503,7 @@
                     h('span', { 'class': 'verdict-key', text: t('label.level') }),
                     levelNode,
                     h('span', { 'class': 'verdict-key', text: t('label.direction') }),
-                    directionChip(detail.direction, kpi.delta, detail.deltaLines)
+                    directionChip(detail.direction, detail.deltaLines)
                 ]),
                 why
             ]);
@@ -513,6 +530,7 @@
                 h('span', { 'class': 'kpi-unit', text: t('unit.' + kpi.unit) }),
                 deltaNode
             ]),
+            subNode,
             h('div', { 'class': 'kpi-spark' }, [sparkline(kpi.spark, stateColor(kpi.state))]),
             foot,
             note
@@ -544,8 +562,11 @@
             ]),
             h('p', { 'class': 'card-note', text: t('legacy.note') }),
             h('div', { 'class': 'legacy-grid' }, metrics.map(function (metric) {
+                // A missing delta is drawn as a dash, not omitted and not zero: "0.0%" reads
+                // as "measured, and it did not move", which is the opposite of the truth.
                 var delta = metric.delta === null || metric.delta === undefined
-                    ? null
+                    ? h('span', { 'class': 'legacy-delta legacy-delta-none', text: '\u2014',
+                        title: t('label.noBaseline') })
                     : h('span', { 'class': 'legacy-delta',
                         text: (metric.delta > 0 ? '+' : '') + fmt(metric.delta, 1) + '%' });
                 return h('div', { 'class': 'legacy-box' }, [
@@ -913,10 +934,16 @@
                         fill: 'url(#cq-censored)', 'fill-opacity': 0.22
                     }));
                 } else {
+                    if (bucket.partial) {
+                        svg.appendChild(s('rect', {
+                            x: plot.x + index * band, y: plot.y, width: band, height: plot.h,
+                            fill: 'url(#cq-censored)', 'fill-opacity': 0.12
+                        }));
+                    }
                     var barHeight = Math.max(1, bucket.churnPct / max * plot.h);
                     svg.appendChild(s('path', {
                         d: barPath(x, plot.y + plot.h - barHeight, barWidth, barHeight, 4),
-                        fill: SERIES_1
+                        fill: SERIES_1, 'fill-opacity': bucket.partial ? 0.55 : 1
                     }));
                 }
 
@@ -933,7 +960,11 @@
                                     value: fmt(bucket.churnPct, 1) + '%' },
                                 { label: t('authors.header.added'),
                                     value: fmt(bucket.added, 0) }
-                            ]);
+                            ].concat(bucket.partial
+                                ? [{ color: DEEMPH, label: t('chart.censored'),
+                                    value: t('label.bucketPartial',
+                                        [fmt(bucket.counted, 0), fmt(bucket.count, 0)]) }]
+                                : []));
                 });
                 hit.addEventListener('pointerleave', tip.hide);
                 svg.appendChild(hit);
@@ -956,7 +987,12 @@
             buckets.map(function (bucket) {
                 return [bucketLabel(bucket),
                     bucket.censored ? '-' : fmt(bucket.churnPct, 1) + '%',
-                    bucket.censored ? t('chart.censored') : ''];
+                    bucket.censored
+                        ? t('chart.censored')
+                        : (bucket.partial
+                            ? t('label.bucketPartial',
+                                [fmt(bucket.counted, 0), fmt(bucket.count, 0)])
+                            : '')];
             })));
         return card;
     }
@@ -1035,11 +1071,15 @@
 
     function clonesSection() {
         var rows = R.clones || [];
+        var dupDetail = kpiByKey('duplication').detail || {};
+        var total = dupDetail.clones || rows.length;
         var card = h('div', { 'class': 'card' }, [
             h('div', { 'class': 'card-head' }, [
                 h('h2', { text: t('section.clones') }),
                 h('span', { 'class': 'eyebrow eyebrow-plain',
-                    text: t('label.clones', [rows.length]) })
+                    text: rows.length < total
+                        ? t('label.clonesShown', [fmt(rows.length, 0), fmt(total, 0)])
+                        : t('label.clones', [fmt(rows.length, 0)]) })
             ])
         ]);
         if (rows.length === 0) {

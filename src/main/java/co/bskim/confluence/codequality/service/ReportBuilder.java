@@ -30,6 +30,11 @@ import java.util.Map;
 public final class ReportBuilder
 {
     private static final long DAY_MS = 24L * 60 * 60 * 1000;
+    /**
+     * How many clone pairs the table carries. The count is not the number found - the tile
+     * says 412 and the table said 412 while listing 60 - so the page has to name both.
+     */
+    private static final int CLONE_TABLE_LIMIT = 60;
 
     private ReportBuilder()
     {
@@ -149,6 +154,15 @@ public final class ReportBuilder
         int dupDeltaLines;
         int dupLinesThen;
         int windowDays;
+        /**
+         * Days between the reference commit and HEAD, which is not the window when there was
+         * no sample inside it. Labelling a 300-day-old baseline "vs 90d ago" is a claim about
+         * the data, not a caption.
+         */
+        int referenceDays;
+        /** False when a ratio cannot be formed: no baseline, or a baseline of zero. */
+        boolean dupDeltaKnown;
+        boolean connDeltaKnown;
         /** Where the repository sits, separately from where it is heading. */
         String stateDupLevel = Thresholds.UNKNOWN;
         String dirDup = Thresholds.UNKNOWN;
@@ -160,10 +174,12 @@ public final class ReportBuilder
         double legacyComplexity;
         double legacyCommentDensity;
         double legacyFunctionLength;
-        double legacyDupDelta;
-        double legacyComplexityDelta;
-        double legacyCommentDelta;
-        double legacyFunctionLengthDelta;
+        // Boxed on purpose: null is "no baseline to compare against", and a double would
+        // report that as a measured 0.0% change.
+        Double legacyDupDelta;
+        Double legacyComplexityDelta;
+        Double legacyCommentDelta;
+        Double legacyFunctionLengthDelta;
 
         double errDensity;
         double connDensity;
@@ -237,18 +253,25 @@ public final class ReportBuilder
         CommitStats reference = windowReference(all, t.windowDays);
         if (reference != null && reference.loc > 0)
         {
+            a.referenceDays = all.isEmpty() ? 0 : (int) Math.round(
+                    (all.get(all.size() - 1).committedAt - reference.committedAt)
+                            / (double) DAY_MS);
             a.dupLinesThen = reference.dupLines;
             a.dupDeltaLines = a.dupLines - reference.dupLines;
-            a.dupDeltaPct = reference.dupLines == 0
-                    ? (a.dupLines > 0 ? 100 : 0)
-                    : 100.0 * a.dupDeltaLines / reference.dupLines;
+            // A percentage of zero is not 100%, it is undefined. The absolute change is still
+            // reported, and it is the honest half of the pair: 0 -> 4,000 lines is +4,000.
+            a.dupDeltaKnown = reference.dupLines > 0;
+            a.dupDeltaPct = a.dupDeltaKnown
+                    ? 100.0 * a.dupDeltaLines / reference.dupLines : 0;
             a.connThen = reference.calls / (reference.loc / 1000.0);
-            a.connDeltaPct = a.connThen == 0 ? 0
-                    : 100.0 * (a.connDensity - a.connThen) / a.connThen;
+            a.connDeltaKnown = a.connThen > 0;
+            a.connDeltaPct = a.connDeltaKnown
+                    ? 100.0 * (a.connDensity - a.connThen) / a.connThen : 0;
         }
         else
         {
             a.dupLinesThen = -1;
+            a.referenceDays = 0;
         }
 
         legacy(a, outcome, reference);
@@ -263,11 +286,30 @@ public final class ReportBuilder
                 : Thresholds.higherIsBetter(a.refactorPct, t.refactorWarn, t.refactorCrit);
         a.stateChurn = a.churnAdded == 0 ? Thresholds.UNKNOWN
                 : Thresholds.lowerIsBetter(a.churnPct, t.churnWarn, t.churnCrit);
-        a.stateDupDelta = Thresholds.WORSENING.equals(a.dirDup)
-                ? Thresholds.lowerIsBetter(a.dupDeltaPct, t.dupDeltaWarn, t.dupDeltaCrit)
-                : (Thresholds.UNKNOWN.equals(a.dirDup) ? Thresholds.UNKNOWN : Thresholds.GOOD);
+        if (!Thresholds.WORSENING.equals(a.dirDup))
+        {
+            a.stateDupDelta = Thresholds.UNKNOWN.equals(a.dirDup)
+                    ? Thresholds.UNKNOWN : Thresholds.GOOD;
+        }
+        else if (a.dupDeltaKnown)
+        {
+            String byRatio =
+                    Thresholds.lowerIsBetter(a.dupDeltaPct, t.dupDeltaWarn, t.dupDeltaCrit);
+            // A percentage may raise the alarm only when the lines behind it are worth one.
+            a.stateDupDelta = Thresholds.CRIT.equals(byRatio)
+                    && Math.abs(a.dupDeltaLines) < t.dupDeltaCritLines
+                    ? Thresholds.WARN : byRatio;
+        }
+        else
+        {
+            // Growing from a baseline of zero: worth flagging, but there is no ratio to say
+            // how badly, so it does not get to be critical.
+            a.stateDupDelta = Thresholds.WARN;
+        }
         a.stateErr = Thresholds.lowerIsBetter(a.errDensity, t.errDensityWarn, t.errDensityCrit);
-        a.stateConn = a.dupLinesThen < 0 ? Thresholds.UNKNOWN
+        // Graded on the delta, so no usable delta means no grade. It used to key off
+        // dupLinesThen and score an undefined 0% as "good".
+        a.stateConn = !a.connDeltaKnown ? Thresholds.UNKNOWN
                 : Thresholds.higherIsBetter(a.connDeltaPct, t.connDeltaWarn, t.connDeltaCrit);
         return a;
     }
@@ -340,9 +382,10 @@ public final class ReportBuilder
         return denominator <= 0 ? 0 : (double) numerator / denominator;
     }
 
-    private static double change(double from, double to)
+    /** Null rather than zero when there is nothing to divide by - see the field comment. */
+    private static Double change(double from, double to)
     {
-        return from == 0 ? 0 : 100.0 * (to - from) / from;
+        return from == 0 ? null : Double.valueOf(100.0 * (to - from) / from);
     }
 
     /** Oldest sampled commit still inside the trend window, or the oldest sampled one. */
@@ -427,11 +470,17 @@ public final class ReportBuilder
                 pair("lines", a.churnLines), pair("added", a.churnAdded),
                 pair("censored", a.censoredCommits)));
 
+        // The percentage is emitted only when it survives both guards the verdict already
+        // applies: a baseline to divide by, and a change big enough not to be arithmetic on
+        // noise. Otherwise the tile showed "+42.9%" in large type directly above a chip
+        // reading "no change" - the floor stopped the verdict and not the number.
+        Double dupDelta = a.dupDeltaKnown && !Thresholds.FLAT.equals(a.dirDup)
+                && !Thresholds.UNKNOWN.equals(a.dirDup)
+                ? round(a.dupDeltaPct, 1) : null;
         Map<String, Object> dup = kpi("duplication", a.dupLines, "lines", a.stateDupLevel,
-                "lower", sampledSpark(all, "dupLines"),
-                a.dupLinesThen < 0 ? null : round(a.dupDeltaPct, 1),
+                "lower", sampledSpark(all, "dupLines"), dupDelta,
                 pair("pct", round(a.dupPct, 2)), pair("clones", a.dupClones),
-                pair("then", a.dupLinesThen), pair("windowDays", a.windowDays),
+                pair("then", a.dupLinesThen), pair("windowDays", a.referenceDays),
                 pair("deltaLines", a.dupDeltaLines),
                 pair("level", a.stateDupLevel),
                 pair("direction", a.dirDup),
@@ -449,8 +498,8 @@ public final class ReportBuilder
 
         kpis.add(kpi("connectivity", round(a.connDensity, 1), "perKloc", a.stateConn,
                 "higher", sampledSpark(all, "connDensity"),
-                a.dupLinesThen < 0 ? null : round(a.connDeltaPct, 1),
-                pair("then", round(a.connThen, 1)), pair("windowDays", a.windowDays),
+                a.connDeltaKnown ? round(a.connDeltaPct, 1) : null,
+                pair("then", round(a.connThen, 1)), pair("windowDays", a.referenceDays),
                 pair("approximate", 1)));
 
         return kpis;
@@ -585,8 +634,10 @@ public final class ReportBuilder
             duplication = a.stateDupLevel;
             axis = "level";
         }
-        String directionState = Thresholds.WORSENING.equals(a.dirDup)
-                ? Thresholds.WARN : Thresholds.GOOD;
+        // Scaled by how much it grew, not by the fact that it grew: +21 lines and +30,000
+        // lines used to earn the same badge, which made dupDeltaWarn/dupDeltaCrit dead
+        // settings that an administrator could edit with no effect.
+        String directionState = a.stateDupDelta;
         if (!Thresholds.UNKNOWN.equals(a.dirDup)
                 && Thresholds.rank(directionState) > Thresholds.rank(duplication))
         {
@@ -702,7 +753,7 @@ public final class ReportBuilder
             clone.put("lineB", hit.lineB);
             clone.put("lines", hit.lines);
             out.add(clone);
-            if (out.size() >= 60)
+            if (out.size() >= CLONE_TABLE_LIMIT)
             {
                 break;
             }
@@ -833,7 +884,7 @@ public final class ReportBuilder
         busParams.put("collision", a.identityCollision);
         findings.add(finding(a.busFactor <= 1 ? Thresholds.CRIT
                         : (a.identityCollision ? Thresholds.WARN : Thresholds.GOOD),
-                "busFactor", busParams, ""));
+                a.identityCollision ? "busFactor" : "busFactorClean", busParams, ""));
 
         if (!outcome.identitySuspects.isEmpty())
         {
@@ -976,6 +1027,12 @@ public final class ReportBuilder
     static String shortSha(String sha)
     {
         return sha == null ? "" : (sha.length() > 8 ? sha.substring(0, 8) : sha);
+    }
+
+    /** Keeps null as null: a delta with no baseline must not become 0.0 on the way out. */
+    static Double round(Double value, int decimals)
+    {
+        return value == null ? null : Double.valueOf(round(value.doubleValue(), decimals));
     }
 
     static double round(double value, int decimals)

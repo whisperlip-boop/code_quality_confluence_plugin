@@ -102,6 +102,15 @@ public final class Thresholds
      * smaller than about four clones is treated as noise rather than a trend.</p>
      */
     public int dupDeltaFloorLines = AnalysisConfig.DUP_MIN_LINES * 4;
+    /**
+     * How many lines a growth has to be worth before a percentage may call it critical.
+     *
+     * <p>The floor above stops a small base from inventing a direction; this stops it from
+     * inventing a severity. A repository holding 50 duplicated lines that reaches 76 is up
+     * 52%, which crosses any percentage band worth setting - and it is 26 lines. The direction
+     * is real and still reported; "act now" is not.</p>
+     */
+    public int dupDeltaCritLines = AnalysisConfig.DUP_MIN_LINES * 20;
 
     /** Lower is better: error-swallowing handlers per KLOC. */
     public double errDensityWarn = 1.0;

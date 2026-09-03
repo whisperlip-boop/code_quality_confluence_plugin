@@ -293,6 +293,12 @@ h1 {
     font-variant-numeric: tabular-nums;
 }
 
+/* No baseline to compare against. Dimmer than a real delta so it does not read as a value. */
+.legacy-delta-none {
+    opacity: 0.5;
+    cursor: help;
+}
+
 .legacy-miss {
     margin: 7px 0 0;
     font-size: 11.5px;
@@ -518,6 +524,15 @@ a {
     font-size: 10.5px;
     color: var(--muted);
     text-align: right;
+}
+
+/* What the tile is graded on but the headline number does not carry: duplication's ratio,
+   churn's excluded commits. Quiet - it is context for the figure, not a second figure. */
+.kpi-sub {
+    margin-top: 5px;
+    font-size: 11.5px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
 }
 
 .kpi-spark {
