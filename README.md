@@ -207,7 +207,7 @@ as ISO-8859-1, so Korean has to be `\uXXXX` escaped. Edit `tools/make-i18n.py`, 
 atlas-mvn test
 ```
 
-Nine of them, and they exist because the numbers are the product. Six pin the copy-paste
+Twenty-one of them, and they exist because the numbers are the product. Six pin the copy-paste
 classifier: scattered language idioms must not count as copying (the case that made the first
 version report 13.7%), a block copied across files, a move within a file, a move across files, a
 copy whose source survived, and **classification independent of the order files entered the
@@ -218,6 +218,15 @@ Three build a repository with JGit and controlled commit dates: the 14-day censo
 churn attributed back to the commit that added the line, and a full-versus-incremental run
 compared field for field - `sampled()` included, because a run that samples different commits
 picks a different trend reference and reports a different delta with no change to the code.
+
+Eight cover URL handling, where a single missing check was each of three security findings: only
+https and ssh accepted, loopback and link-local refused, credentials split out of the URL, a bare
+user name kept (JGit takes the ssh login from the URI), and **private ranges still allowed** -
+pinned deliberately, so a later hardening pass cannot quietly close the main use case.
+
+Four clone real repositories over the local transport to pin that the clone follows the URL. Two
+of them fail against the unfixed code; the other two guard the opposite mistake, discarding a
+clone that was still good.
 
 ## Verification tools
 

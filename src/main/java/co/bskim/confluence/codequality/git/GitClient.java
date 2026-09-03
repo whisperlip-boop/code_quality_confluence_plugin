@@ -59,11 +59,26 @@ public class GitClient
         return new File(storageRoot(), repoId + ".git");
     }
 
-    /** Clones on first use, fetches afterwards, and hands back an open bare repository. */
+    /**
+     * Clones on first use, fetches afterwards, and hands back an open bare repository.
+     *
+     * <p>The URL is checked against the clone's own {@code remote.origin.url} every time, not
+     * only on the first call. It used to be used for the first clone alone: re-point a
+     * registration at another repository and the fetch went to the <em>old</em> remote for ever,
+     * so the screen said one thing and every number on the report came from another codebase,
+     * with nothing to hint at it. Checking here rather than at the point of edit also repairs
+     * the rows of anyone who changed a URL before this existed.</p>
+     */
     public Repository sync(int repoId, String url, RepoAuth auth)
             throws IOException, GitAPIException
     {
         File dir = repoDir(repoId);
+        if (new File(dir, "config").isFile() && !clonedFrom(dir, url))
+        {
+            log.info("Repository {} points at a different remote than its clone; re-cloning",
+                    repoId);
+            deleteRecursively(dir);
+        }
         if (!new File(dir, "config").isFile())
         {
             deleteRecursively(dir);
@@ -97,6 +112,53 @@ public class GitClient
             throw e;
         }
         return repository;
+    }
+
+    /**
+     * Whether the clone in {@code dir} came from {@code url}.
+     *
+     * <p>False for an unreadable clone as well as a mismatched one: a directory this cannot
+     * read the remote of is a directory this should not fetch into. Re-cloning costs bandwidth;
+     * the alternative costs a wrong report that looks right.</p>
+     */
+    private static boolean clonedFrom(File dir, String url)
+    {
+        String stored;
+        try
+        {
+            Repository repository = new FileRepositoryBuilder().setGitDir(dir).build();
+            try
+            {
+                stored = repository.getConfig().getString("remote", "origin", "url");
+            }
+            finally
+            {
+                repository.close();
+            }
+        }
+        catch (IOException e)
+        {
+            log.debug("Cannot read the remote of {}; treating the clone as stale", dir, e);
+            return false;
+        }
+        catch (RuntimeException e)
+        {
+            // A corrupt config throws rather than returning null.
+            log.debug("Cannot read the remote of {}; treating the clone as stale", dir, e);
+            return false;
+        }
+        if (stored == null || stored.isEmpty())
+        {
+            return false;
+        }
+        if (RemoteUrl.carriesSecret(stored))
+        {
+            // Written before URLs were validated, so a token is sitting in this file in clear
+            // text. Re-cloning from the sanitised URL is what removes it from disk.
+            log.info("Discarding a clone whose stored remote still carries a credential");
+            return false;
+        }
+        return RemoteUrl.canonical(stored).equals(RemoteUrl.canonical(url));
     }
 
     /** What a probe actually established. */

@@ -55,7 +55,7 @@ administrators see them.** Link a space to give a team access.
   commit whose cached row has no statics.
 - `STATIC_SAMPLE_TARGET` said 40 while the call site used 40x5; it is 200 and used directly.
 
-### A-3 — tests exist now (9, all green)
+### A-3 — tests exist now (21, all green)
 
 `CopyPasteClassifierTest` (6): scattered idioms are not copies (the case that made v1 report
 13.7%), a six-line block copied across files, a move within a file, a move across files, a copy
@@ -67,7 +67,14 @@ one failed before the A-1 fix and passes after, which is the only evidence the f
 full-versus-incremental comparison **field for field including `sampled()`** - the manual probe
 used to skip exactly that comparison.
 
-Two of these fixtures were wrong at first and are worth remembering: a diff moves whichever side
+`RemoteUrlTest` (8) and `GitClientTest` (4): the security findings had no regression test at
+all, which for a one-line check is how it comes back. Scheme and host refusal, credential
+extraction, **private ranges still allowed on purpose** (pinned so a later hardening pass cannot
+quietly close the product), and the D-1 behaviour above. Each of the two D-1 tests was run
+against the unfixed code and fails there on the assertion it exists for; the two that guard
+against *over*-discarding pass either way, which is what they are for.
+
+Two of the engine fixtures were wrong at first and are worth remembering: a diff moves whichever side
 is cheaper, so a 6-line block next to a 2-line tail reports the *tail* as the addition; and a
 `previousRunAt` in the future pushes the replay floor past the end so nothing is replayed and the
 test passes while checking nothing. Both now assert their own setup.
@@ -91,16 +98,36 @@ were measured but **are not wired in yet** - see below.
   is fine".
 - `D-7`: a non-numeric `id` in the probe body no longer throws a 500.
 
+### D-1 - the clone now follows the URL
+
+`GitClient.sync` used the URL for the first clone only, so re-pointing a registration left every
+later fetch going to the old remote. The run succeeded, the report rendered, the numbers were
+simply another codebase's - the worst shape a bug can take on a server where a personal
+repository and a company one sit side by side.
+
+The check lives in `sync`, not at the point of edit: it compares the clone's own
+`remote.origin.url` with the registration on every run, so it also repairs anything re-pointed
+before the fix existed. A clone it cannot read the remote of counts as stale, and so does one
+whose stored URL still carries a token - re-cloning is what removes that token from disk.
+
+`RemoteUrl.canonical` decides "same remote" for both this and the cache drop in
+`RepositoryService.update`, which have to agree: dropping the cache while keeping the clone
+leaves a report built half from each. It ignores a trailing `.git`, a trailing slash, host case
+and userinfo, because none of those change which repository it is - and comparing raw strings
+replayed an entire history when somebody added a `.git`.
+
+**A bare user name now stays in the URL.** Only a password is stripped. Writing the test found
+that `ssh://git@github.com/...` was being reduced to `ssh://github.com/...`: JGit takes the ssh
+login from the URI, not from the credentials provider, so that would have connected as whatever
+account Confluence runs under and been refused. The scp-like form was never affected, which is
+probably why it went unnoticed.
+
+Verified on the running instance as well as in tests: repository 1 re-pointed from `captureV` to
+this plugin's own repository moved from head `4ddb39e8` to `c210c7a9`, and back again.
+
 ## Next, in order
 
-1. **D-1 - a changed URL does not move the clone.** `GitClient` uses the URL for the first clone
-   only; afterwards it fetches from the existing `origin`. `RepositoryService.update` drops the
-   cache but never calls `gitClient.discard()`. Re-point a repository and the screen says one
-   thing while the content is the other, permanently. This matters more than its position in the
-   review suggests, because personal and company repositories are going to sit side by side on
-   the real server. Fix by discarding on `remoteChanged`, or by rewriting `remote.origin.url`
-   before the fetch. Pin it with a test.
-2. **Java and JS thresholds.** Measured but withheld:
+1. **Java and JS thresholds.** Measured but withheld:
 
    | language | n | p25 | p50 | p75 | p90 |
    |---|---|---|---|---|---|
@@ -114,16 +141,16 @@ were measured but **are not wired in yet** - see below.
    should be replaced rather than silently dropped by the 1000-LOC filter.
    Raw data: `/tmp/cohort-java.tsv`, `/tmp/cohort-js.tsv` (regenerate with
    `tools/clone-cohort.sh` plus `tools/CohortProbe.java`).
-3. **E-1 - p90 rests on two points** in all three languages. Consider a more stable statistic for
+2. **E-1 - p90 rests on two points** in all three languages. Consider a more stable statistic for
    the "act" band, or a larger cohort, and show `n` in the UI.
-4. **E-2 - a comment that disagrees with its data.** `AnalysisConfig` says excluding tests and
+3. **E-2 - a comment that disagrees with its data.** `AnalysisConfig` says excluding tests and
    generated tables brings the cohort into single digits; fastapi is still 25.1% and httpx 14.1%.
    Both look like real duplication, so the comment should change - but fastapi barely moved when
    `docs_src` was excluded and is worth a look.
-5. **C-1 to C-11, D-2 to D-6** from the review: display coherence and operational robustness.
+4. **C-1 to C-11, D-2 to D-6** from the review: display coherence and operational robustness.
    C-6 (a hard-coded cohort size of 19 that would misreport a custom threshold's provenance) is
    already fixed; the rest are open.
-6. **E-3, E-4**: bulk-import detection may over-fire on a young repository; `ChurnTracker` prunes
+5. **E-3, E-4**: bulk-import detection may over-fire on a young repository; `ChurnTracker` prunes
    on the current commit's timestamp, so one future-dated commit empties it.
 
 ## Things worth knowing before touching the code

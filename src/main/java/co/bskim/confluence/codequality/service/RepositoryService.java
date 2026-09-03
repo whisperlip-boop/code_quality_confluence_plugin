@@ -142,7 +142,13 @@ public class RepositoryService
             {
                 return null;
             }
-            boolean remoteChanged = !String.valueOf(repo.getUrl()).equals(url);
+            // Canonical comparison, the same one GitClient uses to decide whether its clone
+            // still belongs to this registration. The two must agree: dropping the cache while
+            // keeping the clone (or the reverse) leaves the report half from each remote.
+            // Comparing the raw strings also replayed an entire history when somebody added or
+            // removed a trailing ".git".
+            boolean remoteChanged = !RemoteUrl.canonical(repo.getUrl())
+                    .equals(RemoteUrl.canonical(url));
             repo.setName(name);
             repo.setUrl(url);
             repo.setBranch(branch);

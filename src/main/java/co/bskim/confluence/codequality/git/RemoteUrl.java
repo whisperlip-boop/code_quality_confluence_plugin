@@ -134,7 +134,11 @@ public final class RemoteUrl
             secret = colon < 0 ? "" : userInfo.substring(colon + 1);
         }
 
-        String sanitised = rebuildWithoutUserInfo(uri, cleaned);
+        // Only a password is stripped. A bare user name is addressing, not a credential, and
+        // for ssh it is load-bearing: JGit takes the login from the URI, so dropping the "git@"
+        // out of ssh://git@github.com/... makes it connect as the Confluence system user and be
+        // refused. It is still reported as embeddedUser, which is what https needs.
+        String sanitised = secret.isEmpty() ? cleaned : rebuildWithoutUserInfo(uri, cleaned);
         return new RemoteUrl(sanitised, user, secret);
     }
 
@@ -153,6 +157,11 @@ public final class RemoteUrl
             return "";
         }
         String cleaned = raw.trim();
+        if (!carriesSecret(cleaned))
+        {
+            // Nothing to hide: a bare user name stays, for the reason given in parse.
+            return cleaned;
+        }
         try
         {
             URI uri = new URI(cleaned);
@@ -175,6 +184,92 @@ public final class RemoteUrl
                     ? cleaned.substring(0, scheme + 3) + cleaned.substring(at + 1)
                     : cleaned;
         }
+    }
+
+    /**
+     * The form to use when asking "is this the same remote as that one".
+     *
+     * <p>Two decisions depend on that answer and have to agree: the cached per-commit rows are
+     * dropped when a registration's URL changes, and the clone on disk is discarded when it no
+     * longer matches the registration. A trailing slash, a trailing {@code .git} and the case of
+     * the host do not make a different repository, and treating them as one would throw away a
+     * full history replay over a typo fix. Userinfo is dropped for the same reason - rotating a
+     * token does not move the remote.</p>
+     */
+    public static String canonical(String raw)
+    {
+        if (raw == null)
+        {
+            return "";
+        }
+        String cleaned = stripUserInfo(raw.trim());
+        int scheme = cleaned.indexOf("://");
+        if (scheme > 0)
+        {
+            // Scheme and host are case-insensitive; the path is not, and GitHub is only
+            // forgiving about it by redirect.
+            int slash = cleaned.indexOf('/', scheme + 3);
+            int end = slash < 0 ? cleaned.length() : slash;
+            cleaned = cleaned.substring(0, end).toLowerCase(Locale.ROOT) + cleaned.substring(end);
+        }
+        cleaned = trimTrailingSlashes(cleaned);
+        if (cleaned.endsWith(".git"))
+        {
+            cleaned = trimTrailingSlashes(cleaned.substring(0, cleaned.length() - 4));
+        }
+        return cleaned;
+    }
+
+    /**
+     * True when the URL carries a password in its userinfo.
+     *
+     * <p>Used to recognise a clone written before {@link #parse} existed: its
+     * {@code remote.origin.url} still holds the token in clear text on disk, and the fix is to
+     * throw that clone away rather than keep fetching with it.</p>
+     */
+    public static boolean carriesSecret(String raw)
+    {
+        if (raw == null || raw.isEmpty())
+        {
+            return false;
+        }
+        String cleaned = raw.trim();
+        int scheme = cleaned.indexOf("://");
+        if (scheme < 0)
+        {
+            // The scp-like form has no password field at all.
+            return false;
+        }
+        int slash = cleaned.indexOf('/', scheme + 3);
+        String authority = slash < 0
+                ? cleaned.substring(scheme + 3) : cleaned.substring(scheme + 3, slash);
+        int at = authority.lastIndexOf('@');
+        return at > 0 && authority.substring(0, at).indexOf(':') >= 0;
+    }
+
+    /** Removes the whole userinfo from an authority, password or not. Identity, not secrecy. */
+    private static String stripUserInfo(String cleaned)
+    {
+        int scheme = cleaned.indexOf("://");
+        if (scheme < 0)
+        {
+            return cleaned;
+        }
+        int slash = cleaned.indexOf('/', scheme + 3);
+        int end = slash < 0 ? cleaned.length() : slash;
+        int at = cleaned.lastIndexOf('@', end - 1);
+        return at > scheme
+                ? cleaned.substring(0, scheme + 3) + cleaned.substring(at + 1) : cleaned;
+    }
+
+    private static String trimTrailingSlashes(String value)
+    {
+        int end = value.length();
+        while (end > 0 && value.charAt(end - 1) == '/')
+        {
+            end--;
+        }
+        return value.substring(0, end);
     }
 
     private static String rebuildWithoutUserInfo(URI uri, String original)
