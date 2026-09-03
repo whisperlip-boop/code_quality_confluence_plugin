@@ -101,10 +101,10 @@ MESSAGES = [
     # Shown only inside the macro browser preview, where the buttons are deliberately absent:
     # the preview runs against the live session, so a Delete there would really delete.
     ("cq.ui.previewNote",
-     "Preview of which repositories this macro will show. Analyse, report and delete appear on "
-     "the saved page; registering and editing live on the administration screen.",
-     "이 매크로가 어떤 레포지터리를 표시할지 미리 보는 화면이다. 분석·리포트·삭제는 저장된 "
-     "페이지에서 나타나고, 신규 등록과 편집은 관리 화면에 있다."),
+     "Preview of which repositories this macro will show. Analyse and report appear on the "
+     "saved page; registering, editing and deleting live on the administration screen.",
+     "이 매크로가 어떤 레포지터리를 표시할지 미리 보는 화면이다. 분석과 리포트는 저장된 "
+     "페이지에서 나타나고, 신규 등록·편집·삭제는 관리 화면에 있다."),
     ("cq.ui.filterNoMatch",
      "No repository matches \u201c{0}\u201d. {1} registered.",
      "\u201c{0}\u201d와(과) 일치하는 레포지터리가 없다. 등록된 것은 {1}개다."),

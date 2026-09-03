@@ -478,21 +478,47 @@ storage, and it says "No repository selected. Edit this macro and choose one or 
 | list and status | yes | yes | name and URL only |
 | report | yes | yes | no |
 | analyse | yes | yes, administrators | no |
-| delete | yes | yes, administrators | no |
+| delete | yes | **no** | no |
 | register, edit | yes | **no** | no |
 | space tags | yes | **no** | no |
 | nothing selected | lists everything | says to pick some | blank |
 
-Registering and editing on a page were in the original brief, and they were removed on request:
-two places to configure one thing is two places for the permissions to drift. Analyse and
-delete stay on the page deliberately - a stale report is worth refreshing where you are reading
-it, and delete keeps its confirmation naming what goes with it. Space tags moved to the
-administration screen, which is where somebody can act on visibility.
+Registering and editing on a page were in the original brief and were removed on request: two
+places to configure one thing is two places for the permissions to drift. Analyse stays,
+because a stale report is worth refreshing where it is read.
+
+**Delete was kept on the page and then removed**, and the round trip is the useful part. Beside
+a filtered list the icon reads as "take this row out of my macro"; it removes the registration,
+the clone and every cached metric. The reporter pressed it, then looked for the repository in
+the picker and found it gone - correctly, because it no longer existed - and asked to be able
+to choose it again. Removing a repository from a macro is unticking it; there is no way for a
+rendered macro to edit its own page's storage, so the button could never have meant what it
+looked like. Space tags moved to the administration screen for the same reason: that is where
+somebody can act on visibility.
 
 `RepoMatchTest` grew to seven cases and runs the shipping file through Nashorn. The picker
 itself is checked by a harness under `/mnt/c/Users/vuno/cq-shot` that stubs the three Confluence
 pieces it touches - what a stub cannot prove is that Confluence honours the override, and only
 opening the dialog shows that.
+
+## Where to pick this up
+
+Everything from both code reviews is closed, and so are the three follow-up steps. What is left
+is one unverified fix and two known limitations - no open defects.
+
+**Unverified, and the reason to look first.** The macro preview went through three attempts:
+stale, then racing, and now refreshing once when the dropdown closes with polling off inside
+the preview. The first two were confirmed wrong on the live instance; **this one has not been
+confirmed right**. Open the macro dialog after a hard reload and tick two boxes: the preview
+should settle on two rows and stay there. If it still flickers or lands short, the next thing
+to try is dropping the automatic refresh entirely and letting the Refresh link do it - stale
+beats wrong, and that is the whole lesson of this round.
+
+Also worth confirming in the same pass: the page no longer offers Delete (3-A), the preview
+note now says deleting lives on the administration screen, and a repository whose stored name
+was hand-typed displays as `owner/repo`. That last one cannot be seen on this instance any more
+because `captureV`, the only such row, was deleted during testing - re-register it to see it,
+and note that a fresh registration derives its name so the difference will not reappear.
 
 ## Next, in order
 
@@ -514,11 +540,19 @@ display would break the macros that reference it.
 **Confluence does not refresh the macro preview when a field changes.** `previewMacro` runs
 when the dialog opens and when the Refresh link is clicked, and nothing else reaches it - a
 field's `change` event does not. So ticking a box left the preview showing the state from
-before the tick, which reads as "I chose one and the preview went blank". The picker now clicks
-Confluence's own Refresh link, debounced, rather than calling `previewMacro` directly, so the
-spinner, the required-parameter check and the error handling stay theirs. Also worth knowing:
-while a required parameter is empty, `previewMacro` clears the pane and returns without
-rendering.
+before the tick. Also worth knowing: while a required parameter is empty, `previewMacro` clears
+the pane and returns without rendering, which is the blank pane the reporter first saw.
+
+Refreshing on every tick made it worse rather than better: the list appeared correct and then
+changed to a shorter one - two selected showed two rows and then one - because a render started
+per tick races the one Confluence starts itself, and whichever finishes last wins with whatever
+value it captured. **The refresh now happens once, when the dropdown closes**, and only if the
+value changed since the last redraw, which is when the choosing is actually finished. Polling
+is also off inside a preview: a preview says which repositories a macro will list, not what
+they are doing right now, and every poll was another chance to redraw.
+
+The general lesson, since it cost several rounds: *correct and then wrong* is a worse failure
+than *stale*, and a fix that introduces a race to remove a delay is not an improvement.
 
 ## Things worth knowing before touching the code
 

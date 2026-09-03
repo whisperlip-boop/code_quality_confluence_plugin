@@ -92,29 +92,33 @@ define('code-quality/macro-browser-overrides',
                 return loaded[key] || fallback;
             }
 
-            var refreshTimer = null;
+            var refreshedValue = null;
 
             /**
-             * Redraws the preview after a change.
+             * Redraws the preview, once, when the choosing is finished.
              *
              * <p>Confluence refreshes the preview when the dialog opens and when somebody
              * clicks the Refresh link, and at no other time - a field's change event does not
-             * reach it. Ticking a box therefore left the preview showing the state from before
-             * the tick, which reads as "I chose one and the preview went blank". Clicking
-             * Confluence's own link is used rather than calling previewMacro directly, so the
-             * spinner, the required-parameter check and the error handling stay theirs.</p>
+             * reach it. So ticking a box left the preview showing the state from before the
+             * tick.</p>
+             *
+             * <p>Refreshing on every tick instead produced something worse: the list appeared
+             * correct and then changed to a shorter one, because a render triggered per
+             * keystroke-equivalent races the one Confluence starts itself and the last to
+             * finish wins with whatever value it captured. Two selected showed two rows and
+             * then one. So this runs when the dropdown closes, which is when the selection is
+             * actually complete, and only if the value has changed since the last redraw.</p>
              */
             function refreshPreview() {
-                if (refreshTimer !== null) {
-                    window.clearTimeout(refreshTimer);
+                var value = $input.val();
+                if (value === refreshedValue) {
+                    return;
                 }
-                refreshTimer = window.setTimeout(function () {
-                    refreshTimer = null;
-                    var $link = $('#macro-browser-preview-link');
-                    if ($link.length && !$link.prop('disabled')) {
-                        $link.click();
-                    }
-                }, 250);
+                var $link = $('#macro-browser-preview-link');
+                if ($link.length && !$link.prop('disabled')) {
+                    refreshedValue = value;
+                    $link.click();
+                }
             }
 
             function publish() {
@@ -128,7 +132,6 @@ define('code-quality/macro-browser-overrides',
                 if (param.required && MacroBrowser.processRequiredParameters) {
                     MacroBrowser.processRequiredParameters();
                 }
-                refreshPreview();
             }
 
             function open() {
@@ -140,6 +143,7 @@ define('code-quality/macro-browser-overrides',
             function close() {
                 $panel.prop('hidden', true);
                 $trigger.attr('aria-expanded', 'false');
+                refreshPreview();
             }
 
             $trigger.on('click', function (event) {
@@ -214,8 +218,9 @@ define('code-quality/macro-browser-overrides',
                 $panel.append($rows);
 
                 // Normalised on load, so a stored id or URL becomes the names the boxes
-                // carry and what is saved matches what is on screen. No refresh: the dialog is
-                // rendering its own first preview at this moment.
+                // carry and what is saved matches what is on screen. No refresh: the dialog
+                // is rendering its own first preview at this moment, and this records the
+                // value it will render so closing the panel without a change does nothing.
                 var names = chosenNames();
                 $input.val(names.join(','));
                 $trigger.text(describe(names));
@@ -223,6 +228,7 @@ define('code-quality/macro-browser-overrides',
                 if (param.required && MacroBrowser.processRequiredParameters) {
                     MacroBrowser.processRequiredParameters();
                 }
+                refreshedValue = $input.val();
             }
 
             $trigger.text(strings('ui.loading', 'Loading...'));

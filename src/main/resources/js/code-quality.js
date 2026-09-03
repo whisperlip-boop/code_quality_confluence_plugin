@@ -508,7 +508,11 @@
                 self.render();
             }));
         }
-        if (CAN_MANAGE) {
+        // Deleting is the administration screen's. Beside a filtered list on a page the icon
+        // reads as "take this row out of my macro", and it removes the registration, the clone
+        // and every cached metric - which is what happened, and is not recoverable by ticking
+        // the box again. Removing a repository from a macro is done by unticking it.
+        if (CAN_MANAGE && onAdminScreen) {
             actions.push(iconButton('delete', text('ui.delete'), function () {
                 if (window.confirm(text('ui.confirmDelete', [label(repo)]))) {
                     self.remove(repo);
@@ -786,6 +790,11 @@
 
     App.prototype.schedulePoll = function () {
         var self = this;
+        if (IN_MACRO_PREVIEW) {
+            // A preview shows which repositories a macro will list, not what they are doing
+            // right now. Polling there only gives it another chance to redraw.
+            return;
+        }
         if (this.pollTimer) {
             window.clearTimeout(this.pollTimer);
             this.pollTimer = null;
