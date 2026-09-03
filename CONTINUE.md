@@ -55,7 +55,7 @@ administrators see them.** Link a space to give a team access.
   commit whose cached row has no statics.
 - `STATIC_SAMPLE_TARGET` said 40 while the call site used 40x5; it is 200 and used directly.
 
-### A-3 — tests exist now (24, all green)
+### A-3 — tests exist now (26, all green)
 
 `CopyPasteClassifierTest` (6): scattered idioms are not copies (the case that made v1 report
 13.7%), a six-line block copied across files, a move within a file, a move across files, a copy
@@ -157,6 +157,72 @@ throws on an unknown code, and `ReportLocalizerTest` walks every code the builde
 every language, asserting no unfilled placeholder and no bare message key. It fails against the
 unfixed code on exactly that string.
 
+### Second review - `203df60..791b1eb`, everything it raised
+
+The second pass could not run the build (Maven Central 403 in that sandbox), so it read the
+sources. It confirmed A-1, A-2, A-3, B-2/B-3/B-4/B-5, C-6, D-1 and D-7, agreed with the three
+cohort judgements, and found seven new things. All seven are closed.
+
+**2-1 was the serious one, and it was mine, from this morning.** Making a bare user name
+"addressing" is right for ssh and wrong for https:
+`https://ghp_xxxxxxxx@github.com/acme/billing.git` is a documented way to authenticate to both
+GitHub and GitLab, has no colon in it, and so came straight through `carriesSecret` and `parse`
+into the URL column in clear text - which is B-1 reopened, with the same REST and report-page
+exposure. `parse` now splits by scheme: under ssh a password-less name stays (JGit takes the
+login from the URI), under https the whole userinfo is a credential and a name with no password
+is taken as the token. `carriesSecret` follows the same rule, so a clone whose stored remote
+looks like this is discarded and the token leaves the disk. Verified live: registering that URL
+stored `https://github.com/acme/billing.git` with `hasToken: true` and an empty user name, and
+the ssh form kept its `git@`.
+
+**2-3 and 2-4 were both consequences of removing the bucket cap**, which is worth noting: the
+cap's removal was right and it moved cost somewhere else.
+
+- 2-3: buckets grew one slot at a time, which a 64-entry cap made harmless and an uncapped
+  index makes quadratic. Measured directly, one window repeated N times:
+  N=10,000 97ms; 20,000 362ms; 40,000 707ms; 80,000 2,340ms - against 0-1ms with capacity
+  doubling. Buckets now double and carry their length in slot 0.
+- 2-4: `MAX_INDEX_ENTRIES = 3_000_000` had no basis. Measured 92-95 bytes per entry
+  (200k/500k/1M, all-distinct windows), so the old ceiling was ~285MB - on the 1GB heap the
+  Confluence container actually runs with, over a quarter of the instance, and an
+  OutOfMemoryError is not the polite stop the cap exists to provide. The ceiling is now derived
+  from the running heap at 10%: ~1M entries on 1GB, ~4M on 4GB, and roughly one entry per line
+  of analysable code.
+
+**2-2** cannot be fixed where it was claimed to be fixed. `checkHost` resolves at save time and
+JGit resolves again at connect time, so a name that answers differently for the two passes
+through. Closing it properly means connecting to the validated address while keeping TLS
+verification pinned to the name, and getting that wrong is worse than the hole. So: the host is
+re-checked before every fetch (`RemoteUrl.revalidate`, called from `AnalysisJobManager`, which
+also catches rows written before scheme validation existed), and the class comment no longer
+claims to defend the metadata address - that is egress policy on the node. The comment used to
+promise something the code cannot do, which is worse than promising nothing.
+
+**2-5** the key file was written with the umask's permissions and restricted afterwards.
+Measured: `rw-r--r--` at the moment the key hits disk. It is now created `0600` before anything
+is written, falling back to the old order only where POSIX permissions are unavailable.
+
+**2-6** `isLoggedIn`/`isAdmin` asked SAL while the space check took its subject from
+`AuthenticatedUserThreadLocal`, so on a stack where SAL sees a user and the thread local is
+empty, `hasPermission(null, ...)` is an *anonymous* check - one space open to anonymous viewers
+would have admitted that request. One resolution path now, from the user key SAL answered with,
+and an unresolvable user is refused rather than downgraded.
+
+**2-7** is a cost, not a defect, and is now documented on `sampleIndices`: crossing a multiple of
+`STATIC_SAMPLE_TARGET` distinct days re-lays-out the sample set, which costs a full replay and
+can move the trend reference by up to a day.
+
+**E-4** took two attempts and the test is why. `Math.max` on the cutoff, as suggested, makes one
+future-dated commit poison the watermark permanently; capping at the analysis clock does not
+work either, because commits replay oldest-first by parentage, so while the walk sits at a
+commit 100 days old "now minus the window" is still 100 days ahead of it and prunes exactly the
+lines the next commit was about to churn. The window is now measured back from the latest
+*believable* commit time - not after the analysis started - and never moves backwards. The
+first version of the test passed against the unfixed code because the mis-dated commit sat
+after the line was added rather than between the addition and the rewrite.
+
+`tools/IncrementalProbe.java` is **deleted** rather than fixed, as the review asked.
+
 ## Next, in order
 
 1. **Java and JS thresholds.** Measured but withheld:
@@ -182,8 +248,7 @@ unfixed code on exactly that string.
 4. **D-2 to D-6** from the review: operational robustness. Orphans left by deleting during a
    run, up to 60 seconds blocking a request thread, the check-then-act race in `submit()`, no
    ceiling on clone size, and an N+1 transaction behind the repository list.
-5. **E-3, E-4**: bulk-import detection may over-fire on a young repository; `ChurnTracker` prunes
-   on the current commit's timestamp, so one future-dated commit empties it.
+5. **E-3**: bulk-import detection may over-fire on a young repository. E-4 is closed.
 
 ## Things worth knowing before touching the code
 
@@ -192,9 +257,10 @@ unfixed code on exactly that string.
   after a real install.
 - Bumping `AnalysisConfig.ALGO_VERSION` invalidates every cached row on purpose. It is at 2.
 - `src/main/resources/code-quality*.properties` are generated by `tools/make-i18n.py`. Edit that.
-- The verification probes under `tools/` are `main` classes, not tests. `IncrementalProbe` has
-  been superseded by `AnalysisEngineTest` and its `x.sampled() && y.sampled()` guard is the hole
-  the review found; the tool still has it.
+- The verification probes under `tools/` are `main` classes, not tests. `IncrementalProbe` is
+  **deleted**: `AnalysisEngineTest` covers it, and the probe still carried the
+  `x.sampled() && y.sampled()` guard that skipped the disagreement it existed to find. A tool
+  that passes for the wrong reason is worse than no tool - somebody runs it and believes it.
 - **Verifying the page needs a synthetic report.** The two registered repositories cannot
   produce a truncated clone table, a mixed-censoring bucket or a missing baseline, so those
   three fixes were checked by editing a report payload and rendering it with `tools/RenderProbe`

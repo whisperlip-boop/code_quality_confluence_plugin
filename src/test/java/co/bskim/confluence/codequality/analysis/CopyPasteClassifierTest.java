@@ -178,6 +178,15 @@ public class CopyPasteClassifierTest
         LineMix forward = classifyWithOrder(ascending, contents);
         LineMix reverse = classifyWithOrder(descending, contents);
 
+        // Both orders must agree, and both must land on the same verdict: equality alone would
+        // also hold if the classifier had started returning zero for everything.
+        //
+        // The verdict here is "moved", because the classifier picks the lexicographically
+        // smallest matching source for determinism, that is mod00, and mod00 is the copy this
+        // commit deleted. Sixty-nine other files still hold the block, so "moved" is a
+        // generous reading - it is the deterministic one, which is what this test is about.
+        assertEquals("mod00 wins the tie-break and this commit deleted it", 6, forward.moved);
+        assertEquals(0, forward.copied);
         assertEquals("copied must not depend on insertion order",
                 forward.copied, reverse.copied);
         assertEquals("moved must not depend on insertion order", forward.moved, reverse.moved);

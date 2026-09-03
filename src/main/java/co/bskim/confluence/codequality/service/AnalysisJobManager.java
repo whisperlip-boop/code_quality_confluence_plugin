@@ -5,6 +5,7 @@ import co.bskim.confluence.codequality.analysis.AnalysisEngine;
 import co.bskim.confluence.codequality.analysis.PathMatcher;
 import co.bskim.confluence.codequality.analysis.Thresholds;
 import co.bskim.confluence.codequality.git.GitClient;
+import co.bskim.confluence.codequality.git.RemoteUrl;
 import co.bskim.confluence.codequality.model.RepoSnapshot;
 import org.eclipse.jgit.lib.Repository;
 import org.slf4j.Logger;
@@ -127,6 +128,14 @@ public class AnalysisJobManager implements DisposableBean
         state.phase = "fetch";
         repositories.markStatus(repoId, RepositoryService.STATUS_RUNNING, "");
         long startedAt = System.currentTimeMillis();
+
+        // Re-checked here, not only when the row was saved. A name that resolved to a real
+        // host in March can resolve to this node's own loopback in September, and the stored
+        // URL would be fetched regardless. This does not make the check atomic with the
+        // connection - RemoteUrl's class comment says what that would take and why it is not
+        // done - but the answer has to be acceptable now rather than once. It also catches a
+        // row written before scheme validation existed.
+        RemoteUrl.revalidate(repo.url);
 
         Repository git = gitClient.sync(repoId, repo.url, repositories.authFor(repo));
         try

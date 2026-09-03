@@ -88,7 +88,7 @@ public class RemoteUrlTest
     }
 
     /**
-     * A user name with no password stays in the URL.
+     * Under ssh a user name with no password stays in the URL.
      *
      * <p>Not cosmetic: JGit takes the ssh login from the URI, so an {@code ssh://git@github.com}
      * stripped down to {@code ssh://github.com} connects as whatever account Confluence runs
@@ -96,19 +96,50 @@ public class RemoteUrlTest
      * that is an https concept.</p>
      */
     @Test
-    public void aUserNameWithoutAPasswordIsAddressingAndSurvives() throws Exception
+    public void anSshUserNameIsAddressingAndSurvives() throws Exception
     {
         RemoteUrl ssh = RemoteUrl.parse("ssh://git@github.com/acme/billing.git");
         assertEquals("ssh://git@github.com/acme/billing.git", ssh.url);
         assertEquals("git", ssh.embeddedUser);
         assertFalse(ssh.carriedCredentials());
+        assertFalse(RemoteUrl.carriesSecret("ssh://git@github.com/acme/billing.git"));
 
         assertEquals("ssh://git@github.com/acme/billing.git",
                 RemoteUrl.sanitiseForDisplay("ssh://git@github.com/acme/billing.git"));
-        assertEquals("a password, on the other hand, never survives",
-                "https://github.com/acme/billing.git",
-                RemoteUrl.sanitiseForDisplay(
-                        "https://user:ghp_secret@github.com/acme/billing.git"));
+        assertEquals("an ssh password, on the other hand, never survives",
+                "ssh://github.com/acme/billing.git",
+                RemoteUrl.sanitiseForDisplay("ssh://git:hunter2@github.com/acme/billing.git"));
+    }
+
+    /**
+     * B-1, the half that stayed open: a token alone in the user position.
+     *
+     * <p>{@code https://ghp_xxx@github.com/acme/billing.git} is a documented way to
+     * authenticate to both GitHub and GitLab, and it has no colon in it. Treating a
+     * password-less user name as addressing - which is right for ssh - left the token in the
+     * URL column in clear text, from where the REST list and the report page hand it to every
+     * logged-in user. Under https nothing in the user position is addressing.</p>
+     */
+    @Test
+    public void anHttpsTokenInTheUserPositionIsACredential() throws Exception
+    {
+        String url = "https://ghp_1234567890abcdef@github.com/acme/billing.git";
+
+        RemoteUrl parsed = RemoteUrl.parse(url);
+        assertEquals("https://github.com/acme/billing.git", parsed.url);
+        assertEquals("ghp_1234567890abcdef", parsed.embeddedSecret);
+        assertEquals("", parsed.embeddedUser);
+        assertTrue(parsed.carriedCredentials());
+
+        assertTrue("a clone whose stored remote looks like this must be discarded",
+                RemoteUrl.carriesSecret(url));
+        assertEquals("https://github.com/acme/billing.git",
+                RemoteUrl.sanitiseForDisplay(url));
+
+        // Same treatment for a name that only looks like a login: guessing wrong the other way
+        // stores a secret in the clear, and guessing wrong this way costs a failed fetch.
+        assertEquals("bskim", RemoteUrl.parse("https://bskim@github.com/acme/billing.git")
+                .embeddedSecret);
     }
 
     /** The scp-like form is ssh and carries no password. */
@@ -153,13 +184,17 @@ public class RemoteUrlTest
 
     /** Recognising a clone written before validation existed, whose config still holds a token. */
     @Test
-    public void carriesSecretSpotsAPasswordInTheAuthority()
+    public void carriesSecretSpotsAnythingInTheUserPosition()
     {
         assertTrue(RemoteUrl.carriesSecret(
                 "https://x-access-token:ghp_secret@github.com/acme/billing.git"));
-        assertFalse("a user name alone is not a secret",
+        assertTrue("under https a bare user name is a token as often as not",
                 RemoteUrl.carriesSecret("https://someone@github.com/acme/billing.git"));
         assertFalse(RemoteUrl.carriesSecret("https://github.com/acme/billing.git"));
+        assertFalse("under ssh the login name is addressing",
+                RemoteUrl.carriesSecret("ssh://git@github.com/acme/billing.git"));
+        assertTrue("but an ssh password is still a password",
+                RemoteUrl.carriesSecret("ssh://git:hunter2@github.com/acme/billing.git"));
         assertFalse("the scp-like form has no password field",
                 RemoteUrl.carriesSecret("git@github.com:acme/billing.git"));
         assertFalse("a colon in the path is not userinfo",

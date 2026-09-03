@@ -136,8 +136,8 @@ Everything runs inside Confluence - no worker, no external database, no Node run
   on a Confluence node is how a reporting feature turns into an outage.
 - Per-commit metrics are cached in Active Objects. A rerun replays only new commits plus a
   trailing window wide enough that every commit whose churn could still change is re-derived.
-  The incremental path is verified to produce numbers identical to a full recompute
-  (`tools/IncrementalProbe.java`).
+  The incremental path is verified to produce numbers identical to a full recompute, field for
+  field, by `AnalysisEngineTest`.
 - The duplicate detector and the error/connectivity scanners are Java reimplementations of what
   the proof of concept did with jscpd and tree-sitter, which a JVM plugin cannot load.
 
@@ -207,7 +207,7 @@ as ISO-8859-1, so Korean has to be `\uXXXX` escaped. Edit `tools/make-i18n.py`, 
 atlas-mvn test
 ```
 
-Twenty-four of them, and they exist because the numbers are the product. Six pin the copy-paste
+Twenty-six of them, and they exist because the numbers are the product. Six pin the copy-paste
 classifier: scattered language idioms must not count as copying (the case that made the first
 version report 13.7%), a block copied across files, a move within a file, a move across files, a
 copy whose source survived, and **classification independent of the order files entered the
@@ -228,6 +228,10 @@ Four clone real repositories over the local transport to pin that the clone foll
 of them fail against the unfixed code; the other two guard the opposite mistake, discarding a
 clone that was still good.
 
+One pins that a mis-dated commit cannot silence churn for the rest of the history, and one that
+a token in the user position of an https URL is a credential rather than a login name - both
+fail against the code they were written for.
+
 Three walk every finding and caveat the report can emit, in every language, asserting that none
 comes out holding an unfilled `{0}`. The wording lives in three places that have to agree - the
 code the builder emits, the argument list keyed off it, and the message in each bundle - and
@@ -241,7 +245,6 @@ Not part of the plugin; they run the engine outside Confluence.
 | Tool | What it does |
 |---|---|
 | `tools/Probe.java` | Runs the engine on a bare clone and dumps the report JSON |
-| `tools/IncrementalProbe.java` | Asserts an incremental run matches a full one commit for commit |
 | `tools/RenderProbe.java` | Renders the report page (both languages) to a file so the layout can be looked at |
 | `tools/MakeIcons.java` | Rasterises `images/code-quality.png` into the two UPM icon sizes |
 

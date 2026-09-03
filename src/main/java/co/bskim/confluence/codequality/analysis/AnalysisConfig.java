@@ -58,7 +58,40 @@ public final class AnalysisConfig
      * with a message saying so. A wrong number that looks right is worse than a run that stops
      * and tells you to narrow the exclusions.</p>
      */
-    public static final int MAX_INDEX_ENTRIES = 3_000_000;
+    public static int maxIndexEntries()
+    {
+        long budget = (long) (Runtime.getRuntime().maxMemory() * INDEX_HEAP_SHARE);
+        long allowed = budget / INDEX_BYTES_PER_ENTRY;
+        return (int) Math.max(MIN_INDEX_ENTRIES, Math.min(MAX_INDEX_ENTRIES_CEILING, allowed));
+    }
+
+    /**
+     * Measured cost of one index entry, in bytes.
+     *
+     * <p>Not an estimate: {@code HashMap<Long, long[]>} with one entry per window comes to
+     * 92-95 bytes across 200k, 500k and 1M entries of all-distinct windows, and less when
+     * windows repeat because they share a bucket. Rounded up, and it is the all-distinct case
+     * that has to fit.</p>
+     */
+    private static final int INDEX_BYTES_PER_ENTRY = 96;
+
+    /**
+     * How much of the heap the index may take.
+     *
+     * <p>The cap used to be a flat 3,000,000 entries, which is about 285MB - on the 1GB heap a
+     * Confluence container ships with, that is over a quarter of the instance's memory spent on
+     * one reporting job, and unlike {@code IndexTooLargeException} an OutOfMemoryError does not
+     * fail politely: it takes the node with it. The reason the cap exists at all is that
+     * stopping beats reporting a wrong number, and an OOM is not stopping.</p>
+     *
+     * <p>Derived from the running heap rather than fixed, so a 1GB instance refuses what a 4GB
+     * one accepts instead of both guessing. One index entry is roughly one line of analysable
+     * code, so 10% of a 1GB heap is around a million lines.</p>
+     */
+    private static final double INDEX_HEAP_SHARE = 0.10;
+
+    private static final int MIN_INDEX_ENTRIES = 250_000;
+    private static final int MAX_INDEX_ENTRIES_CEILING = 8_000_000;
     public static final int MAX_CLONE_PAIRS = 400;
 
     /** Paths that are checked in but not written by the team. */

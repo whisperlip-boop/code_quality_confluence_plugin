@@ -7,9 +7,12 @@ import com.atlassian.confluence.spaces.Space;
 import com.atlassian.confluence.spaces.SpaceManager;
 import com.atlassian.confluence.user.AuthenticatedUserThreadLocal;
 import com.atlassian.confluence.user.ConfluenceUser;
+import com.atlassian.confluence.user.UserAccessor;
 import com.atlassian.plugin.spring.scanner.annotation.imports.ComponentImport;
 import com.atlassian.sal.api.user.UserManager;
 import com.atlassian.sal.api.user.UserProfile;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
 import javax.inject.Named;
@@ -34,18 +37,23 @@ import java.util.Map;
 @Named
 public class AccessGuard
 {
+    private static final Logger log = LoggerFactory.getLogger(AccessGuard.class);
+
     private final UserManager userManager;
     private final PermissionManager permissionManager;
     private final SpaceManager spaceManager;
+    private final UserAccessor userAccessor;
 
     @Inject
     public AccessGuard(@ComponentImport UserManager userManager,
                        @ComponentImport PermissionManager permissionManager,
-                       @ComponentImport SpaceManager spaceManager)
+                       @ComponentImport SpaceManager spaceManager,
+                       @ComponentImport UserAccessor userAccessor)
     {
         this.userManager = userManager;
         this.permissionManager = permissionManager;
         this.spaceManager = spaceManager;
+        this.userAccessor = userAccessor;
     }
 
     public UserProfile currentUser()
@@ -87,7 +95,15 @@ public class AccessGuard
         {
             return false;
         }
-        ConfluenceUser user = AuthenticatedUserThreadLocal.get();
+        ConfluenceUser user = confluenceUser();
+        if (user == null)
+        {
+            // isLoggedIn() said there is a user, so failing to resolve them is a bug or an
+            // unusual REST stack - not a licence to check permissions as anonymous.
+            log.warn("Could not resolve {} to a Confluence user; refusing access",
+                    currentUserName());
+            return false;
+        }
         for (String key : repo.spaceKeys)
         {
             Space space = spaceManager.getSpace(key);
@@ -99,11 +115,42 @@ public class AccessGuard
         return false;
     }
 
+    /**
+     * Resolves the request's user through one path only.
+     *
+     * <p>{@code isLoggedIn} and {@code isAdmin} ask SAL's {@link UserManager}, while the space
+     * check needs a {@code ConfluenceUser}. Taking the second from
+     * {@link AuthenticatedUserThreadLocal} meant two different answers to "who is asking":
+     * on a REST stack where SAL sees a user and the thread local is empty,
+     * {@code hasPermission(null, ...)} is an <b>anonymous</b> check, so one space open to
+     * anonymous viewers would have let that request through. Resolving from the same user key
+     * SAL answered with keeps it to one subject.</p>
+     */
+    private ConfluenceUser confluenceUser()
+    {
+        UserProfile profile = userManager.getRemoteUser();
+        if (profile == null || profile.getUserKey() == null)
+        {
+            return null;
+        }
+        ConfluenceUser user = userAccessor.getExistingUserByKey(profile.getUserKey());
+        if (user != null)
+        {
+            return user;
+        }
+        // Falls back to the thread local, which is right whenever it is populated.
+        return AuthenticatedUserThreadLocal.get();
+    }
+
     /** Spaces the current user can view, for the registration form's picker. */
     public Map<String, String> viewableSpaces()
     {
         Map<String, String> spaces = new LinkedHashMap<String, String>();
-        ConfluenceUser user = AuthenticatedUserThreadLocal.get();
+        ConfluenceUser user = confluenceUser();
+        if (user == null)
+        {
+            return spaces;
+        }
         for (Space space : spaceManager.getAllSpaces())
         {
             if (permissionManager.hasPermission(user, Permission.VIEW, space))

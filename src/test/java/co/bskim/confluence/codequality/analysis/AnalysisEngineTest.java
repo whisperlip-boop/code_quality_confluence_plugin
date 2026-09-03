@@ -162,6 +162,38 @@ public class AnalysisEngineTest
         assertEquals("HEAD calls", full.headCalls, incremental.headCalls);
     }
 
+    /**
+     * One mis-dated commit must not silence churn for the rest of the history.
+     *
+     * <p>Commit dates are author-supplied. A wrong clock or a deliberately dated commit puts
+     * one years ahead, and pruning the churn window from that commit's timestamp emptied the
+     * tracker: every commit after it reported zero churn, with no censoring flag and nothing
+     * on the report to say the number was meaningless.</p>
+     */
+    @Test
+    public void aFutureDatedCommitDoesNotSilenceChurn() throws Exception
+    {
+        commit("a.py", body(1, 30), "seed", now - 200 * DAY);
+        commit("a.py", body(1, 30) + line("feature_line_added_here = compute(1)"),
+                "add a line", now - 100 * DAY);
+        // Dated two years out, and sitting between the addition and the rewrite: this is what
+        // used to prune the line out of the tracker before anything could churn it.
+        commit("b.py", body(2, 30), "committed by a machine with a broken clock",
+                now + 730 * DAY);
+        commit("a.py", body(1, 30) + line("feature_line_rewritten_here = compute(2)"),
+                "rewrite it two days later", now - 98 * DAY);
+
+        List<CommitStats> commits = analyse(Collections.<String, CommitStats>emptyMap(), 0)
+                .commits;
+        assertEquals(4, commits.size());
+
+        CommitStats added = commits.get(1);
+        assertEquals("setup: the second commit must be the one that added the line", 1,
+                added.added);
+        assertEquals("the rewrite must still be attributed to it", 1, added.churn);
+        assertFalse("and its window is long closed", added.churnCensored);
+    }
+
     // ------------------------------------------------------------------ helpers
 
     private AnalysisEngine.Outcome analyse(Map<String, CommitStats> cached, long previousRunAt)

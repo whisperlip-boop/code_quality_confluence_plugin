@@ -17,9 +17,15 @@ import javax.inject.Named;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.security.SecureRandom;
 import java.util.Base64;
+import java.util.EnumSet;
+import java.util.Set;
 
 /**
  * Encrypts access tokens at rest.
@@ -238,9 +244,7 @@ public class TokenCipher
             {
                 throw new IOException("Cannot create " + parent);
             }
-            Files.write(file.toPath(),
-                    Base64.getEncoder().encodeToString(fresh).getBytes(StandardCharsets.UTF_8));
-            restrictToOwner(file);
+            writeKeyFile(file, fresh);
             log.info("Created a new access-token encryption key at {}", file);
             return fresh;
         }
@@ -278,6 +282,43 @@ public class TokenCipher
     }
 
     /** Best effort: a key file the whole machine can read defeats the point of moving it. */
+    /**
+     * Writes the key so that it is never briefly readable by anyone else.
+     *
+     * <p>{@code Files.write} then {@code chmod} leaves a window: the file exists with the
+     * umask's permissions - usually 0644 - and holds the key, and only afterwards is it
+     * restricted. Short, but a key only has to be read once. Where POSIX permissions are
+     * available the file is created 0600 <b>before</b> anything is written to it; elsewhere
+     * (Windows) it falls back to the old order, which is the best the platform offers.</p>
+     */
+    private static void writeKeyFile(File file, byte[] fresh) throws IOException
+    {
+        byte[] encoded =
+                Base64.getEncoder().encodeToString(fresh).getBytes(StandardCharsets.UTF_8);
+        Path path = file.toPath();
+        try
+        {
+            Set<PosixFilePermission> ownerOnly = EnumSet.of(PosixFilePermission.OWNER_READ,
+                    PosixFilePermission.OWNER_WRITE);
+            Files.createFile(path, PosixFilePermissions.asFileAttribute(ownerOnly));
+            Files.write(path, encoded);
+            return;
+        }
+        catch (UnsupportedOperationException e)
+        {
+            log.debug("POSIX permissions unavailable; creating the key file then restricting it",
+                    e);
+        }
+        catch (FileAlreadyExistsException e)
+        {
+            // Another node or thread got there first; its content is the key to use, and the
+            // caller re-reads. Writing over it would strand every token already encrypted.
+            throw new IOException("The key file appeared while it was being created", e);
+        }
+        Files.write(path, encoded);
+        restrictToOwner(file);
+    }
+
     private static void restrictToOwner(File file)
     {
         if (!file.setReadable(false, false) || !file.setWritable(false, false)

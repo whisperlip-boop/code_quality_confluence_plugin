@@ -68,6 +68,10 @@ public class GitClient
      * so the screen said one thing and every number on the report came from another codebase,
      * with nothing to hint at it. Checking here rather than at the point of edit also repairs
      * the rows of anyone who changed a URL before this existed.</p>
+     *
+     * <p>This takes the URL as given and does not validate it - {@link RemoteUrl#revalidate}
+     * is the caller's job, and {@code AnalysisJobManager} does it before every run. Any new
+     * caller that fetches from a stored URL has to do the same.</p>
      */
     public Repository sync(int repoId, String url, RepoAuth auth)
             throws IOException, GitAPIException

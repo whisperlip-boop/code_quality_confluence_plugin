@@ -42,16 +42,50 @@ public final class ChurnTracker
             new HashMap<String, Map<String, Deque<Pending>>>();
     private final Deque<Pending> chronological = new ArrayDeque<Pending>();
     private final long windowMs;
+    /** When the analysis started: a commit dated after this is not telling the truth. */
+    private final long analysedAt;
+    /** Latest believable commit time seen so far. The window is measured back from here. */
+    private long latestPlausible = Long.MIN_VALUE;
 
-    public ChurnTracker(long windowMs)
+    public ChurnTracker(long windowMs, long analysedAt)
     {
         this.windowMs = windowMs;
+        this.analysedAt = analysedAt;
     }
 
-    /** Drops everything that can no longer be churned, given the commit now being processed. */
+    /**
+     * Drops everything that can no longer be churned, given the commit now being processed.
+     *
+     * <p>Commit timestamps are author-supplied and not monotonic: a wrong clock, a rebase or a
+     * deliberately dated commit can put one years ahead. Taking the cutoff straight from the
+     * current commit let a single such commit prune the whole tracker, after which every
+     * following commit reported zero churn - a silent zero, which is the worst kind.</p>
+     *
+     * <p>So the window is measured back from the latest <em>believable</em> commit time seen,
+     * where believable means "not after the analysis started". A commit dated two years out
+     * no longer moves the window at all, and the walk carries on from where the real history
+     * had reached. The watermark also never moves backwards, because the walk is ordered by
+     * parentage rather than by date and re-pruning an earlier window would drop lines that are
+     * still churnable.</p>
+     *
+     * <p>Capping the cutoff at the analysis clock instead is not enough, and finding that out
+     * took writing the test: commits are replayed oldest-first by parentage, so while the walk
+     * is at a commit a hundred days old, "now minus the window" is still a hundred days ahead
+     * of it and prunes exactly the lines the next commit was about to churn.</p>
+     */
     public void advanceTo(long now)
     {
-        long cutoff = now - windowMs;
+        if (now <= analysedAt && now > latestPlausible)
+        {
+            latestPlausible = now;
+        }
+        if (latestPlausible == Long.MIN_VALUE)
+        {
+            // Nothing believable yet - every commit so far claims to be in the future. Prune
+            // nothing rather than guess.
+            return;
+        }
+        long cutoff = latestPlausible - windowMs;
         while (!chronological.isEmpty() && chronological.peekFirst().timestamp < cutoff)
         {
             Pending stale = chronological.pollFirst();

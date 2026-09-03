@@ -22,9 +22,22 @@ import java.util.regex.Pattern;
  * <p><b>Private address ranges are allowed on purpose.</b> An internal GitLab on 10.x is the
  * main thing this plugin is pointed at; blocking it to prevent port scanning would close the
  * product rather than the hole. The scanning signal came from returning raw connection errors
- * to the caller, and that is closed in {@link GitClient} by reporting a category instead.
- * Loopback, link-local (which covers the cloud metadata address) and wildcard addresses are
- * refused, because no real remote lives there.</p>
+ * to the caller, and that is closed in {@link GitClient} by reporting a category instead.</p>
+ *
+ * <p><b>What the host check does and does not buy.</b> It refuses obvious and declared local
+ * addresses - loopback, wildcard, link-local, multicast - at the moment a URL is saved and
+ * again before each fetch. It does <b>not</b> survive a name whose answer changes between the
+ * check and the connection: a host that resolves to a public address for us and to
+ * {@code 169.254.169.254} for JGit passes, because the two resolutions are separate. Closing
+ * that properly means connecting to the address we validated, which under JGit means a custom
+ * connection factory that has to keep TLS verification pinned to the name - getting that wrong
+ * is worse than the hole. So the cloud metadata address is not defended here; it belongs to
+ * egress policy on the node. An unresolvable name is also allowed through deliberately, so a
+ * Confluence node behind split-horizon DNS still works.</p>
+ *
+ * <p>The earlier version of this comment claimed link-local addresses were refused full stop,
+ * which the code cannot promise. A security note that overstates its own guarantee is worse
+ * than none - somebody reads it and stops looking.</p>
  */
 public final class RemoteUrl
 {
@@ -134,11 +147,31 @@ public final class RemoteUrl
             secret = colon < 0 ? "" : userInfo.substring(colon + 1);
         }
 
-        // Only a password is stripped. A bare user name is addressing, not a credential, and
-        // for ssh it is load-bearing: JGit takes the login from the URI, so dropping the "git@"
-        // out of ssh://git@github.com/... makes it connect as the Confluence system user and be
-        // refused. It is still reported as embeddedUser, which is what https needs.
-        String sanitised = secret.isEmpty() ? cleaned : rebuildWithoutUserInfo(uri, cleaned);
+        // The two schemes read userinfo differently, and conflating them leaks a token.
+        //
+        // ssh: the login name is addressing. JGit takes it from the URI rather than from the
+        // credentials provider, so dropping the "git@" out of ssh://git@github.com/... makes
+        // the clone connect as whatever account Confluence runs under and be refused.
+        //
+        // https: userinfo is only ever a credential. Both GitHub and GitLab accept a token on
+        // its own in the user position - https://ghp_xxx@github.com/acme/billing.git - so a
+        // bare name with no password has to be treated as the secret, not kept in the URL.
+        // Keeping it stored a personal access token in clear text in the database and handed
+        // it back through the REST list and the report page.
+        String sanitised;
+        if ("ssh".equals(scheme))
+        {
+            sanitised = secret.isEmpty() ? cleaned : rebuildWithoutUserInfo(uri, cleaned);
+        }
+        else
+        {
+            if (secret.isEmpty())
+            {
+                secret = user;
+                user = "";
+            }
+            sanitised = rebuildWithoutUserInfo(uri, cleaned);
+        }
         return new RemoteUrl(sanitised, user, secret);
     }
 
@@ -221,11 +254,16 @@ public final class RemoteUrl
     }
 
     /**
-     * True when the URL carries a password in its userinfo.
+     * True when the URL's userinfo has to be treated as a credential.
      *
-     * <p>Used to recognise a clone written before {@link #parse} existed: its
+     * <p>Scheme-dependent, for the reason given in {@link #parse}: under https anything in the
+     * user position is a secret, because a token alone is a documented way to authenticate;
+     * under ssh only a password is, because the login name is addressing.</p>
+     *
+     * <p>Also used to recognise a clone written before validation existed - its
      * {@code remote.origin.url} still holds the token in clear text on disk, and the fix is to
-     * throw that clone away rather than keep fetching with it.</p>
+     * throw that clone away rather than keep fetching with it. That is the aggressive
+     * direction, which is the right one to err in.</p>
      */
     public static boolean carriesSecret(String raw)
     {
@@ -244,7 +282,15 @@ public final class RemoteUrl
         String authority = slash < 0
                 ? cleaned.substring(scheme + 3) : cleaned.substring(scheme + 3, slash);
         int at = authority.lastIndexOf('@');
-        return at > 0 && authority.substring(0, at).indexOf(':') >= 0;
+        if (at <= 0)
+        {
+            return false;
+        }
+        if ("ssh".equals(cleaned.substring(0, scheme).toLowerCase(Locale.ROOT)))
+        {
+            return authority.substring(0, at).indexOf(':') >= 0;
+        }
+        return true;
     }
 
     /** Removes the whole userinfo from an authority, password or not. Identity, not secrecy. */
@@ -293,6 +339,19 @@ public final class RemoteUrl
             out.append('?').append(uri.getRawQuery());
         }
         return out.toString();
+    }
+
+    /**
+     * Re-runs the host check on an already-stored URL, immediately before it is used.
+     *
+     * <p>Validating only on save leaves a URL that was fine in March fetching from whatever
+     * its name resolves to in September. This does not make the check atomic with the
+     * connection - see the class comment - but it does mean the answer has to be acceptable
+     * now rather than once.</p>
+     */
+    public static void revalidate(String raw) throws InvalidRemoteException
+    {
+        parse(raw);
     }
 
     /**

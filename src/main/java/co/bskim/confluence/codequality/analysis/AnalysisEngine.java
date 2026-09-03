@@ -175,7 +175,8 @@ public final class AnalysisEngine
             }
 
             int[] churnByIndex = new int[chain.size()];
-            ChurnTracker churn = new ChurnTracker(AnalysisConfig.CHURN_WINDOW_MS);
+            ChurnTracker churn =
+                    new ChurnTracker(AnalysisConfig.CHURN_WINDOW_MS, analysisTime);
             DiffFormatter differ = newDiffFormatter();
 
             try
@@ -549,6 +550,16 @@ public final class AnalysisEngine
      * {@code ReportBuilder} picked as its 90-day reference, so the trend delta moved with no
      * change to the code. Bucketing the entire chain makes the set depend on the history and
      * not on how much of it this run happened to touch.</p>
+     *
+     * <p><b>The set does move when the history grows past a multiple of
+     * {@link AnalysisConfig#STATIC_SAMPLE_TARGET} distinct days.</b> The step widens, so which
+     * commits are sampled is re-laid-out across the whole chain, and
+     * {@link #floorForSampledGaps} then pulls the replay floor back far enough to compute
+     * statics for the newly sampled ones - in practice a full replay of the history. Two
+     * consequences worth knowing rather than being surprised by: that one run is as expensive
+     * as a first run, and the trend's reference commit can shift by up to a day, so a delta
+     * can move slightly without the code having changed. This is a cost, not an error; the
+     * alternative is a sample set that depends on when the analysis happened to run.</p>
      */
     private Set<Integer> sampleIndices(List<RevCommit> chain)
     {

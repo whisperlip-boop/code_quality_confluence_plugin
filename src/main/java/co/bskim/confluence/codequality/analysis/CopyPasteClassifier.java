@@ -73,8 +73,11 @@ public final class CopyPasteClassifier
             int bestPathId = -1;
             int bestStart = -1;
 
-            for (long packed : candidates)
+            // Slot 0 is the count; the array behind it is the index's storage and is longer.
+            int candidateCount = (int) candidates[0];
+            for (int c = 1; c <= candidateCount; c++)
             {
+                long packed = candidates[c];
                 int pathId = NgramIndex.unpackPath(packed);
                 int start = NgramIndex.unpackIndex(packed);
                 FileLines source = parent.get(parent.path(pathId));
