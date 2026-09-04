@@ -9,10 +9,18 @@
 
     <resource type="i18n" name="i18n" location="code-quality"/>
 
+    <!-- What the macro's repository parameter accepts. Its own resource because the page and
+         the editor are different documents and both need it: the editor loads only the macro
+         browser override, which was falling back to an exact name comparison without it. -->
+    <web-resource key="code-quality-repo-match" name="Code Quality Repository Matcher">
+        <resource type="download" name="repo-match.js" location="/js/repo-match.js"/>
+    </web-resource>
+
     <!-- Loaded into pages that host the macro. The standalone servlet pages inline the same
          two files instead, so there is exactly one copy of the table's CSS and JS. -->
     <web-resource key="code-quality-resources" name="Code Quality Web Resources">
         <dependency>com.atlassian.auiplugin:ajs</dependency>
+        <dependency>co.bskim.confluence.code-quality:code-quality-repo-match</dependency>
         <resource type="download" name="code-quality.css" location="/css/code-quality.css"/>
         <resource type="download" name="code-quality.js" location="/js/code-quality.js"/>
         <!-- Serves the macro browser icon; without a served path the macro shows no icon. -->
@@ -24,6 +32,7 @@
          browser only; the page bundle above knows nothing about it. -->
     <web-resource key="code-quality-macro-browser" name="Code Quality Macro Browser">
         <dependency>com.atlassian.auiplugin:ajs</dependency>
+        <dependency>co.bskim.confluence.code-quality:code-quality-repo-match</dependency>
         <resource type="download" name="macro-browser.js" location="/js/macro-browser.js"/>
         <resource type="download" name="macro-browser.css" location="/css/macro-browser.css"/>
         <context>macro-browser</context>

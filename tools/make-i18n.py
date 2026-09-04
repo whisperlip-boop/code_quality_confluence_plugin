@@ -94,6 +94,12 @@ MESSAGES = [
     ("cq.ui.pickNone", "Choose repositories\u2026", "레포지터리 고르기\u2026"),
     ("cq.ui.selectedSuffix", "selected", "개 선택됨"),
     ("cq.ui.filterPlaceholder", "Filter", "검색"),
+    # Shown when the macro names a repository this account cannot see. The picker rewrites the
+    # parameter from the ticked boxes and the list it ticks from is permission-filtered, so
+    # without saying this the reference would be dropped on save with nothing on screen.
+    ("cq.ui.keptUnseen",
+     "Also keeping {0}, which this macro names but this account cannot see.",
+     "이 매크로가 가리키지만 이 계정에서는 보이지 않는 {0}도 함께 유지한다."),
     ("cq.ui.loading", "Loading\u2026", "불러오는 중\u2026"),
     ("cq.ui.pickInDialog",
      "Choose one or more repositories on the left.",

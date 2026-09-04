@@ -30,24 +30,32 @@ define('code-quality/macro-browser-overrides',
         /** Above this many repositories the panel offers a filter box. */
         var FILTER_FROM = 8;
 
+        /*
+         * The matcher is a declared dependency of this resource, not something to degrade
+         * around. It used to fall back to comparing the parameter against the stored name
+         * exactly when window.CqRepoMatch was absent - and it was always absent, because the
+         * editor loads this file and not the app. So a macro whose parameter held an id, a
+         * clone URL, or a bare name for a repository stored as owner/repo opened with nothing
+         * ticked, and the picker then wrote that emptiness back. If it is missing now,
+         * something is wrong that guessing cannot fix, and the plain text field is the honest
+         * answer - it accepts every form the parameter does.
+         */
+        function matcher() {
+            return window.CqRepoMatch;
+        }
+
         function split(value) {
-            return String(value || '').split(',').map(function (part) {
-                return part.trim();
-            }).filter(function (part) {
-                return part !== '';
-            });
+            return matcher().refs(value);
         }
 
         /** What the row shows. Derived by the server so every screen agrees - see the DTO. */
         function label(repo) {
-            return repo.label || repo.name;
+            return matcher().label(repo);
         }
 
         /** Does a stored reference - a name, an id, a URL - point at this repository? */
         function identifies(repo, ref) {
-            return window.CqRepoMatch
-                ? window.CqRepoMatch.identifies(repo, ref)
-                : String(ref) === String(repo.name);
+            return matcher().identifies(repo, ref);
         }
 
         /** The live value of our parameter, or null when our macro's form is not loaded. */
@@ -114,6 +122,18 @@ define('code-quality/macro-browser-overrides',
             $input.after($picker);
 
             var repos = [];
+            /**
+             * References the parameter holds that name none of the repositories on offer.
+             *
+             * <p>Carried through every rewrite of the field instead of being dropped. The list
+             * this picker ticks from is {@code GET /repos}, which is filtered by permission, so
+             * an editor who can see repository A but not B - opening a macro that names both -
+             * would tick A, save "A", and destroy the reference to B with nothing on screen to
+             * notice. A reference that resolves to nothing visible is not a reference to
+             * nothing. It also covers a macro saved before this picker existed, whose parameter
+             * may hold a form no box carries.</p>
+             */
+            var kept = [];
 
             function chosenNames() {
                 var names = [];
@@ -123,17 +143,23 @@ define('code-quality/macro-browser-overrides',
                 return names;
             }
 
+            /** Everything the parameter will hold: what is ticked, then what is being kept. */
+            function selection() {
+                return chosenNames().concat(kept);
+            }
+
             function describe(names) {
-                if (names.length === 0) {
+                var total = names.length + kept.length;
+                if (total === 0) {
                     return strings('ui.pickNone', 'Choose repositories\u2026');
                 }
-                if (names.length === 1) {
+                if (total === 1 && names.length === 1) {
                     var only = repos.filter(function (repo) {
                         return repo.name === names[0];
                     })[0];
                     return only ? label(only) : names[0];
                 }
-                return names.length + ' ' + strings('ui.selectedSuffix', 'selected');
+                return total + ' ' + strings('ui.selectedSuffix', 'selected');
             }
 
             var loaded = {};
@@ -172,9 +198,9 @@ define('code-quality/macro-browser-overrides',
 
             function publish() {
                 var names = chosenNames();
-                $input.val(names.join(','));
+                $input.val(selection().join(','));
                 $trigger.text(describe(names));
-                $trigger.toggleClass('cq-picker-empty', names.length === 0);
+                $trigger.toggleClass('cq-picker-empty', names.length + kept.length === 0);
                 $input.trigger('change');
                 // Order matters: the required check enables the Refresh link, and the refresh
                 // is a no-op while it is disabled.
@@ -253,6 +279,7 @@ define('code-quality/macro-browser-overrides',
                 }
 
                 var chosen = split($input.val());
+                kept = matcher().unresolved(repos, $input.val());
                 repos.forEach(function (repo) {
                     var $row = $('<label class="cq-picker-row"></label>')
                         .attr('data-search',
@@ -273,15 +300,22 @@ define('code-quality/macro-browser-overrides',
                     $rows.append($row);
                 });
                 $panel.append($rows);
+                if (kept.length) {
+                    // Said out loud, because it is the difference between a reference this
+                    // account is looking after and one it is about to destroy.
+                    $panel.append($('<p class="cq-picker-status"></p>').text(
+                        strings('ui.keptUnseen', 'Also keeping {0}, which this macro names '
+                            + 'but this account cannot see.').replace('{0}', kept.join(', '))));
+                }
 
                 // Normalised on load, so a stored id or URL becomes the names the boxes
                 // carry and what is saved matches what is on screen. No refresh: the dialog
                 // is rendering its own first preview at this moment, and this records the
                 // value it will render so closing the panel without a change does nothing.
                 var names = chosenNames();
-                $input.val(names.join(','));
+                $input.val(selection().join(','));
                 $trigger.text(describe(names));
-                $trigger.toggleClass('cq-picker-empty', names.length === 0);
+                $trigger.toggleClass('cq-picker-empty', names.length + kept.length === 0);
                 if (param.required && MacroBrowser.processRequiredParameters) {
                     MacroBrowser.processRequiredParameters();
                 }
@@ -289,6 +323,15 @@ define('code-quality/macro-browser-overrides',
                 // The dialog rendered its first preview from the raw stored value while this
                 // list was still loading; paint so the frame agrees with the normalised one.
                 paintPreview();
+            }
+
+            if (!matcher()) {
+                // Its own web resource and a declared dependency of this one. Absent means the
+                // resource did not load, and a picker that cannot read the stored parameter
+                // would rewrite it into whatever it managed to tick.
+                $picker.remove();
+                $input.show();
+                return MacroBrowser.Field($container, $input, {});
             }
 
             $trigger.text(strings('ui.loading', 'Loading...'));
@@ -305,6 +348,7 @@ define('code-quality/macro-browser-overrides',
                 setValue: function (value) {
                     $input.val(value);
                     if (repos.length) {
+                        kept = matcher().unresolved(repos, value);
                         var wanted = split(value);
                         $panel.find("input[type='checkbox']").each(function () {
                             var name = $(this).val();

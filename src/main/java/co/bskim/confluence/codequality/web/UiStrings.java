@@ -20,6 +20,7 @@ public final class UiStrings
             "ui.analyze", "ui.report", "ui.cancel", "ui.save", "ui.test", "ui.never",
             "ui.empty", "ui.emptyAdmin", "ui.noneSelected", "ui.pickInDialog",
             "ui.pickNone", "ui.selectedSuffix", "ui.filterPlaceholder", "ui.loading",
+            "ui.keptUnseen",
             "ui.previewNote", "ui.filterNoMatch",
             "ui.filterAvailable",
             "ui.confirmDelete", "ui.noReport", "ui.adminOnly",

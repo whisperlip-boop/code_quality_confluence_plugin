@@ -78,6 +78,8 @@ public class AdminServlet extends HttpServlet
         out.print("/\">");
         out.print(StaticAssets.escape(i18n.getText("cq.admin.back")));
         out.print("</a></p></div><script>");
+        // The matcher first: code-quality.js reads it through the window object.
+        out.print(StaticAssets.read("/js/repo-match.js"));
         out.print(StaticAssets.read("/js/code-quality.js"));
         out.print("</script></body></html>");
     }

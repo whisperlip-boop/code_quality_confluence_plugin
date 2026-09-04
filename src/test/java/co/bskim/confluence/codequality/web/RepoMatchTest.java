@@ -46,8 +46,11 @@ public class RepoMatchTest
         engine = new ScriptEngineManager().getEngineByName("nashorn");
         assertNotNull("no JavaScript engine in this JDK, so this test cannot run", engine);
         engine.eval(BROWSER_STUB);
+        // In the order the browser loads them: the matcher is its own web resource and a
+        // declared dependency of both the app and the macro browser override.
+        engine.eval(source("src/main/resources/js/repo-match.js"));
         engine.eval(source("src/main/resources/js/code-quality.js"));
-        assertEquals("the file must export its matcher", "object",
+        assertEquals("the matcher must be on the window for both documents to reach", "object",
                 engine.eval("typeof window.CqRepoMatch"));
 
         engine.eval("var repo = { id: 7, name: 'captureV',"
@@ -212,5 +215,54 @@ public class RepoMatchTest
         File file = new File(path);
         assertTrue("cannot find " + file.getAbsolutePath(), file.isFile());
         return new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
+    }
+
+    /**
+     * A reference the picker cannot resolve is kept, not destroyed.
+     *
+     * <p>The macro browser rewrites the parameter from its ticked boxes, and the list it ticks
+     * from is {@code GET /repos} - filtered by permission. An editor who can see repository A
+     * but not B, opening a macro that names both, would tick A, save "A", and lose B with no
+     * error and nothing on screen. That is silent data loss caused by who happened to open the
+     * dialog, so the unresolved references are carried through every rewrite.</p>
+     */
+    @Test
+    public void aReferenceToSomethingUnseenIsKeptRatherThanDropped() throws Exception
+    {
+        engine.eval("var visible = [{ id: 7, name: 'captureV',"
+                + " url: 'https://github.com/whisperlip-boop/captureV.git' }];");
+
+        assertEquals("a repository this account cannot see must survive the rewrite",
+                "acme/secret", unresolved("captureV,acme/secret"));
+        assertEquals("in the form it was written, so its owner still recognises it",
+                "https://github.com/acme/Secret.git",
+                unresolved("captureV,https://github.com/acme/Secret.git"));
+        assertEquals("several of them, in the order written",
+                "acme/one|acme/two", unresolved("acme/one,captureV,acme/two"));
+        assertEquals("nothing is kept when everything resolves", "", unresolved("captureV"));
+        assertEquals("nor when the selection is empty", "", unresolved(""));
+        assertEquals("and blanks between separators are not references", "", unresolved(" , ,"));
+    }
+
+    /** Every form the parameter accepts resolves, so none of them is mistaken for unseen. */
+    @Test
+    public void nothingResolvableIsMistakenForUnseen() throws Exception
+    {
+        engine.eval("var visible = [{ id: 7, name: 'captureV',"
+                + " url: 'https://github.com/whisperlip-boop/captureV.git' }];");
+
+        assertEquals("", unresolved("7"));
+        assertEquals("", unresolved("whisperlip-boop/captureV"));
+        assertEquals("", unresolved("https://github.com/whisperlip-boop/captureV.git"));
+        assertEquals("", unresolved("git@github.com:whisperlip-boop/captureV.git"));
+        assertEquals("", unresolved("  CAPTUREV  "));
+    }
+
+    /** The references that name nothing in {@code visible}, joined so a mismatch reads. */
+    private String unresolved(String selection) throws ScriptException
+    {
+        engine.put("selection", selection);
+        return String.valueOf(
+                engine.eval("window.CqRepoMatch.unresolved(visible, selection).join('|')"));
     }
 }
