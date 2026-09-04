@@ -92,7 +92,9 @@ MESSAGES = [
     # ui.pickInDialog, which the preview pane shows and which points at this field - inside the
     # field itself "on the left" points at nothing.
     ("cq.ui.pickNone", "Choose repositories\u2026", "레포지터리 고르기\u2026"),
-    ("cq.ui.selectedSuffix", "selected", "개 선택됨"),
+    # A whole sentence, not a suffix glued to a number. "3" + " " + "개 선택됨" put a space
+    # where Korean does not want one, and no language has to agree about word order.
+    ("cq.ui.selectedCount", "{0} selected", "{0}개 선택됨"),
     ("cq.ui.filterPlaceholder", "Filter", "검색"),
     # Shown when the macro names a repository this account cannot see. The picker rewrites the
     # parameter from the ticked boxes and the list it ticks from is permission-filtered, so
@@ -446,6 +448,8 @@ MESSAGES = [
     ("cq.label.censoredNote",
      "Greyed points are still inside the 14-day window.",
      "회색 구간은 아직 14일 관측 창 안이다."),
+    # The hover label on a bucketed chart: how many commits it holds and the days it spans.
+    ("cq.label.bucket", "{0} commits  {1} - {2}", "커밋 {0}건  {1} - {2}"),
     ("cq.label.delta", "vs {0}d ago", "{0}일 전 대비"),
     # When the reference commit is less than a day back, which is what a repository whose whole
     # history arrived in one afternoon looks like. "vs 0d ago" is not a comparison.

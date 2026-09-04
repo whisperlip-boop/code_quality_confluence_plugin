@@ -4,6 +4,7 @@ import com.atlassian.confluence.content.render.xhtml.ConversionContext;
 import com.atlassian.confluence.macro.Macro;
 import com.atlassian.confluence.macro.MacroExecutionException;
 import com.atlassian.plugin.spring.scanner.annotation.imports.ComponentImport;
+import com.atlassian.sal.api.message.I18nResolver;
 import com.atlassian.webresource.api.assembler.PageBuilderService;
 
 import javax.inject.Inject;
@@ -20,11 +21,14 @@ import java.util.Map;
 public class CodeQualityMacro implements Macro
 {
     private final PageBuilderService pageBuilderService;
+    private final I18nResolver i18n;
 
     @Inject
-    public CodeQualityMacro(@ComponentImport PageBuilderService pageBuilderService)
+    public CodeQualityMacro(@ComponentImport PageBuilderService pageBuilderService,
+                            @ComponentImport I18nResolver i18n)
     {
         this.pageBuilderService = pageBuilderService;
+        this.i18n = i18n;
     }
 
     @Override
@@ -41,8 +45,11 @@ public class CodeQualityMacro implements Macro
         return "<div class=\"cq-app\" data-context=\"macro\""
                 + " data-only=\"" + escape(only) + "\""
                 + " data-title=\"" + escape(title) + "\">"
-                + "<div class=\"cq-loading\">Loading repositories...</div>"
-                + "</div>";
+                // Resolved here rather than written in English: this is what the reader sees
+                // if the script never runs, and it is the one string on the page the script
+                // cannot come back and translate.
+                + "<div class=\"cq-loading\">" + escape(i18n.getText("cq.ui.loading"))
+                + "</div></div>";
     }
 
     @Override
@@ -57,9 +64,11 @@ public class CodeQualityMacro implements Macro
         return OutputType.BLOCK;
     }
 
+    /** All five, like {@code StaticAssets.escape}. This was the only partial one left. */
     private static String escape(String value)
     {
         return value == null ? "" : value.replace("&", "&amp;")
-                .replace("\"", "&quot;").replace("<", "&lt;");
+                .replace("<", "&lt;").replace(">", "&gt;")
+                .replace("\"", "&quot;").replace("'", "&#39;");
     }
 }

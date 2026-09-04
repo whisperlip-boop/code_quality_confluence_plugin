@@ -5,6 +5,7 @@ import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.revwalk.RevWalk;
 import org.eclipse.jgit.treewalk.TreeWalk;
+import org.junit.Assume;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -13,6 +14,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.Collections;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
@@ -226,6 +228,39 @@ public class GitClientTest
         {
             cloned.close();
         }
+    }
+
+    /**
+     * The sweep must not delete through a link.
+     *
+     * <p>{@code listFiles()} walks straight into a directory symlink, so a link left under the
+     * clone root - which lives inside the Confluence home - would have had the sweep delete
+     * whatever it pointed at rather than the link.</p>
+     */
+    @Test
+    public void theSweepDoesNotFollowASymbolicLinkOutOfTheCloneRoot() throws Exception
+    {
+        File root = folder.newFolder("store");
+        File outside = folder.newFolder("not-ours");
+        File treasure = new File(outside, "keep-me.txt");
+        Files.write(treasure.toPath(), "important".getBytes(StandardCharsets.UTF_8));
+
+        File orphan = new File(root, "99.git");
+        assertTrue(orphan.mkdirs());
+        try
+        {
+            Files.createSymbolicLink(new File(orphan, "escape").toPath(), outside.toPath());
+        }
+        catch (UnsupportedOperationException | IOException e)
+        {
+            Assume.assumeNoException("this filesystem does not do symbolic links", e);
+        }
+
+        assertEquals(1, clientRootedAt(root).discardOrphans(Collections.<Integer>emptySet()));
+
+        assertFalse("the orphaned clone must be gone", orphan.exists());
+        assertTrue("but not what the link pointed at", treasure.isFile());
+        assertTrue("nor the directory holding it", outside.isDirectory());
     }
 
     // ------------------------------------------------------------------ helpers

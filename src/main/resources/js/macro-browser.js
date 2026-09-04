@@ -59,6 +59,16 @@ define('code-quality/macro-browser-overrides',
         }
 
         /** The live value of our parameter, or null when our macro's form is not loaded. */
+        /** A string Confluence itself can resolve, for the moments before the payload lands. */
+        function fromConfluence(key, fallback) {
+            try {
+                var resolved = AJS.I18n.getText(key);
+                return resolved && resolved !== key ? resolved : fallback;
+            } catch (ignored) {
+                return fallback;
+            }
+        }
+
         function currentSelection() {
             var $input = $('#macro-param-repository');
             return $input.length ? $input.val() : null;
@@ -159,7 +169,7 @@ define('code-quality/macro-browser-overrides',
                     })[0];
                     return only ? label(only) : names[0];
                 }
-                return total + ' ' + strings('ui.selectedSuffix', 'selected');
+                return strings('ui.selectedCount', '{0} selected').replace('{0}', total);
             }
 
             var loaded = {};
@@ -347,7 +357,10 @@ define('code-quality/macro-browser-overrides',
                 return MacroBrowser.Field($container, $input, {});
             }
 
-            $trigger.text(strings('ui.loading', 'Loading...'));
+            // Confluence's own i18n, not the REST payload: this label is set before the
+            // request that carries the payload, so a Korean reader was shown the English
+            // fallback here every time and the localised string never once.
+            $trigger.text(fromConfluence('cq.ui.loading', 'Loading...'));
             $.ajax({ url: API, dataType: 'json' })
                 .done(buildPanel)
                 .fail(function () {

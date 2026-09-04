@@ -176,8 +176,25 @@ public class AnalysisJobManager implements InitializingBean, DisposableBean
             return false;
         }
 
-        repositories.markStatus(repoId, RepositoryService.STATUS_QUEUED, "");
+        // The claim and the work that follows it have to fail together. Between the two,
+        // markStatus can throw and submit can be rejected - a plugin being disabled is enough -
+        // and the map entry then stayed for good with nobody to clear it: every later analyze
+        // answered {"queued": false} for that repository until the node restarted.
+        try
+        {
+            repositories.markStatus(repoId, RepositoryService.STATUS_QUEUED, "");
+            startJob(repoId, state);
+        }
+        catch (RuntimeException e)
+        {
+            jobs.remove(repoId, state);
+            throw e;
+        }
+        return true;
+    }
 
+    private void startJob(final int repoId, final JobState state)
+    {
         executor.submit(() ->
         {
             ClassLoader original = Thread.currentThread().getContextClassLoader();
@@ -213,7 +230,6 @@ public class AnalysisJobManager implements InitializingBean, DisposableBean
                 sweepOrphanClones();
             }
         });
-        return true;
     }
 
     private void run(int repoId, JobState state) throws Exception

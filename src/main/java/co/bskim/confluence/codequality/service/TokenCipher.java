@@ -227,32 +227,47 @@ public class TokenCipher
         }
     }
 
+    /**
+     * Reads the key, creating it once if this is the first token on the instance.
+     *
+     * <p>Twice around, because losing the race to create the file is not a failure: the winner's
+     * content is the key everyone must use, and writing over it would strand every token
+     * already encrypted. {@code writeKeyFile} said as much - "the caller re-reads" - but the
+     * caller turned every IOException into an IllegalStateException, so on a Data Center
+     * cluster two nodes storing their first token at the same moment meant one of them
+     * answering 500. The second pass finds the file the other node wrote.</p>
+     */
     private byte[] loadOrCreateKeyFile()
     {
         File file = keyFile();
-        try
+        IOException last = null;
+        for (int attempt = 0; attempt < 2; attempt++)
         {
-            if (file.isFile())
+            try
             {
-                byte[] encoded = Files.readAllBytes(file.toPath());
-                return Base64.getDecoder().decode(new String(encoded, StandardCharsets.UTF_8)
-                        .trim());
+                if (file.isFile())
+                {
+                    byte[] encoded = Files.readAllBytes(file.toPath());
+                    return Base64.getDecoder().decode(
+                            new String(encoded, StandardCharsets.UTF_8).trim());
+                }
+                byte[] fresh = newKey();
+                File parent = file.getParentFile();
+                if (!parent.isDirectory() && !parent.mkdirs())
+                {
+                    throw new IOException("Cannot create " + parent);
+                }
+                writeKeyFile(file, fresh);
+                log.info("Created a new access-token encryption key at {}", file);
+                return fresh;
             }
-            byte[] fresh = newKey();
-            File parent = file.getParentFile();
-            if (!parent.isDirectory() && !parent.mkdirs())
+            catch (IOException e)
             {
-                throw new IOException("Cannot create " + parent);
+                last = e;
             }
-            writeKeyFile(file, fresh);
-            log.info("Created a new access-token encryption key at {}", file);
-            return fresh;
         }
-        catch (IOException e)
-        {
-            throw new IllegalStateException("Cannot read or create the encryption key at "
-                    + file, e);
-        }
+        throw new IllegalStateException("Cannot read or create the encryption key at " + file,
+                last);
     }
 
     /**

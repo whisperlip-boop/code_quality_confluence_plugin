@@ -15,6 +15,9 @@ import org.slf4j.LoggerFactory;
 import javax.inject.Inject;
 import javax.inject.Named;
 import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.LinkOption;
+import java.nio.file.Path;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.Locale;
@@ -227,9 +230,12 @@ public class GitClient
 
     private static long sizeOf(File file)
     {
-        if (file.isFile())
+        Path path = file.toPath();
+        // Not through links either: one pointing at something large would make the ceiling
+        // refuse a clone over bytes the clone does not hold.
+        if (!Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS))
         {
-            return file.length();
+            return file.isFile() ? file.length() : 0;
         }
         File[] children = file.listFiles();
         if (children == null)
@@ -502,19 +508,30 @@ public class GitClient
      * container running as a different uid looks like - cannot be deleted, and reporting it as
      * cleaned up means nobody ever finds out it is still there.</p>
      */
+    /**
+     * Deletes a tree without following anything out of it.
+     *
+     * <p>{@code listFiles()} walks straight through a directory symlink, so a link under the
+     * clone root would have had this delete the contents of whatever it pointed at - and the
+     * clone root sits inside the Confluence home. A link is removed as a link.</p>
+     */
     private static boolean deleteRecursively(File file)
     {
-        if (!file.exists())
+        Path path = file.toPath();
+        if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS))
         {
             return true;
         }
         boolean clean = true;
-        File[] children = file.listFiles();
-        if (children != null)
+        if (Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS))
         {
-            for (File child : children)
+            File[] children = file.listFiles();
+            if (children != null)
             {
-                clean &= deleteRecursively(child);
+                for (File child : children)
+                {
+                    clean &= deleteRecursively(child);
+                }
             }
         }
         if (file.delete())

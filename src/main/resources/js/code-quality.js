@@ -65,8 +65,18 @@
     function text(key, args) {
         var value = STRINGS[key];
         if (value === undefined || value === null) {
-            return key;
+            // Only reachable before the first response, which is exactly when the one message
+            // that matters is the failure to fetch it. Printing the key put the literal
+            // "ui.error" on the screen and dropped the reason with it.
+            return FALLBACK[key] === undefined ? key : format(FALLBACK[key], args);
         }
+        if (!args) {
+            return value;
+        }
+        return format(value, args);
+    }
+
+    function format(value, args) {
         if (!args) {
             return value;
         }
@@ -75,6 +85,17 @@
             return replacement === undefined ? match : String(replacement);
         });
     }
+
+    /**
+     * The few strings that may be needed before the server has sent any.
+     *
+     * <p>English, and deliberately so: this is the path where the request for the localised
+     * ones is the thing that failed.</p>
+     */
+    var FALLBACK = {
+        'ui.error': 'Could not load the repositories: {0}',
+        'ui.loading': 'Loading repositories...'
+    };
 
     function request(method, url, body) {
         return new Promise(function (resolve, reject) {

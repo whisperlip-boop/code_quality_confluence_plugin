@@ -434,8 +434,7 @@
         if (bucket.count === 1) {
             return bucket.from.sha + '  ' + fmtDay(bucket.at);
         }
-        return bucket.count + ' commits  ' + fmtDay(bucket.from.at) + ' - '
-            + fmtDay(bucket.to.at);
+        return t('label.bucket', [bucket.count, fmtDay(bucket.from.at), fmtDay(bucket.to.at)]);
     }
 
     // ---------------------------------------------------------------- sparkline

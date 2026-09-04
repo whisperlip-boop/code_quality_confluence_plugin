@@ -56,7 +56,8 @@ public final class ReportLocalizer
             "label.tableView", "label.clones", "label.clonesShown", "label.why",
             "label.hideWhy", "label.noBaseline", "label.dupShare", "label.churnCensored",
             "label.bucketPartial",
-            "label.findings", "label.deltaToday", "label.language", "lang.ko", "lang.en"
+            "label.findings", "label.deltaToday", "label.bucket", "label.language",
+            "lang.ko", "lang.en"
     };
 
     private ReportLocalizer()
