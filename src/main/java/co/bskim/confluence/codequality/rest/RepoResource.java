@@ -67,14 +67,12 @@ public class RepoResource
         List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
         // One query for the whole column rather than one per row - see repoIdsWithReports.
         Set<Integer> withReports = repositories.repoIdsWithReports();
-        for (RepoSnapshot repo : repositories.all())
+        // Space-scoped: a row the caller cannot view is not listed at all, so probing
+        // sequential ids reveals nothing either. Filtered in one pass rather than a permission
+        // check per row - see AccessGuard.viewable.
+        for (RepoSnapshot repo : access.viewable(repositories.all()))
         {
-            // Space-scoped: a row the caller cannot view is not listed at all, so probing
-            // sequential ids reveals nothing either.
-            if (access.canView(repo))
-            {
-                rows.add(toDto(repo, withReports.contains(repo.id)));
-            }
+            rows.add(toDto(repo, withReports.contains(repo.id)));
         }
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
         payload.put("repos", rows);

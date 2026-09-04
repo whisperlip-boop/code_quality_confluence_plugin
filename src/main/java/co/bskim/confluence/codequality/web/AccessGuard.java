@@ -17,6 +17,8 @@ import org.slf4j.LoggerFactory;
 import javax.inject.Inject;
 import javax.inject.Named;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -83,17 +85,33 @@ public class AccessGuard
     /** True when the current user may see this repository's row and report. */
     public boolean canView(RepoSnapshot repo)
     {
-        if (repo == null || !isLoggedIn())
+        return repo != null && !viewable(Collections.singletonList(repo)).isEmpty();
+    }
+
+    /**
+     * The subset of these repositories the current user may see.
+     *
+     * <p>The list endpoint used to call {@link #canView} per row, and each call asked SAL who
+     * is calling, resolved them to a {@code ConfluenceUser}, and then looked up and checked
+     * every one of that row's spaces. Forty repositories across three spaces came to forty user
+     * resolutions and up to a hundred and twenty space lookups - on every page that hosts the
+     * macro, and again every two seconds while a run is in flight. None of those answers can
+     * change within one response, so each is worked out once.</p>
+     *
+     * <p>{@code canView} is this method with one element, deliberately: a permission rule with
+     * two implementations is a permission rule with two behaviours.</p>
+     */
+    public List<RepoSnapshot> viewable(List<RepoSnapshot> repos)
+    {
+        List<RepoSnapshot> visible = new ArrayList<RepoSnapshot>();
+        if (repos.isEmpty() || !isLoggedIn())
         {
-            return false;
+            return visible;
         }
         if (isAdmin())
         {
-            return true;
-        }
-        if (repo.spaceKeys.isEmpty())
-        {
-            return false;
+            visible.addAll(repos);
+            return visible;
         }
         ConfluenceUser user = confluenceUser();
         if (user == null)
@@ -102,17 +120,30 @@ public class AccessGuard
             // unusual REST stack - not a licence to check permissions as anonymous.
             log.warn("Could not resolve {} to a Confluence user; refusing access",
                     currentUserName());
-            return false;
+            return visible;
         }
-        for (String key : repo.spaceKeys)
+        Map<String, Boolean> bySpace = new HashMap<String, Boolean>();
+        for (RepoSnapshot repo : repos)
         {
-            Space space = spaceManager.getSpace(key);
-            if (space != null && permissionManager.hasPermission(user, Permission.VIEW, space))
+            // No spaces linked means administrators only, and this user is not one.
+            for (String key : repo.spaceKeys)
             {
-                return true;
+                Boolean allowed = bySpace.get(key);
+                if (allowed == null)
+                {
+                    Space space = spaceManager.getSpace(key);
+                    allowed = space != null
+                            && permissionManager.hasPermission(user, Permission.VIEW, space);
+                    bySpace.put(key, allowed);
+                }
+                if (allowed)
+                {
+                    visible.add(repo);
+                    break;
+                }
             }
         }
-        return false;
+        return visible;
     }
 
     /**
