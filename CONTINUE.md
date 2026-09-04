@@ -503,74 +503,53 @@ opening the dialog shows that.
 
 ## Where to pick this up
 
-Everything from both code reviews is closed, and so are the three follow-up steps. The macro
-preview is verified end to end against the running instance **and confirmed by the reporter on
-2026-09-04**: ticking a box shows the right repositories immediately, on a fresh insert and on
-an edit alike. Two known limitations remain and there are no open defects.
+Three code reviews are closed. The third one (`REVIEW-3-code-quality-plugin.txt`, against
+`9c5f8f2`) was worked in the order it recommended, and everything in it has been acted on or
+answered. What is deliberately **not** done is at the bottom of this section.
 
-It took four attempts, and only the first was a fault in this plugin's own logic. The other
-three were the environment lying: a browser pinned to a pre-deploy copy of the file, and
-Confluence rewriting the rendered table. Both are written up below, because neither is visible
-from a screenshot and both will happen again to anyone working on this dialog.
+**The four release blockers, each verified against the running instance.**
 
-**Read this before believing any screen.** Re-installing the same plugin version leaves the
-browser running the previous build's JavaScript, and reloading does not fix it. Confluence keys
-web-resource URLs on the plugin version and the resource list, not on their content, and serves
-them as immutable - so a rebuilt `1.0.0` arrives at an unchanged URL and the cached copy stands.
-The macro browser's preview frame is worse: it is created by script after the page loads, so
-even Ctrl+Shift+R cannot dislodge the copy inside it. Three rounds of preview fixes were
-reported as not working while the deployed code was correct. `deploy.sh` now appends a build
-timestamp to the reported version through `${cq.build.qualifier}`, which changes the URL on
-every deploy; the pom still says `1.0.0` and a release build without that property is unchanged.
-Confirmed by deploying twice and watching the URL hash move.
+| | What it was | How it was proved |
+|---|---|---|
+| 1-1 | The probe took a URL and a repository id as independent inputs and used the stored token against whichever URL was sent, so a Confluence administrator could have somebody's access token sent to any host. | A probe naming an unroutable host with repository 3's id answered `tokenOffered: true`; it answers `false` now, and the repository's own URL still answers `true`. No credential left the machine. |
+| 1-4 | The macro picker rewrote its parameter from the boxes it managed to tick, and `GET /repos` is permission-filtered - so an editor who could see A but not B silently dropped B on save. The matcher it ticked with was never loaded in the editor either, so it compared names exactly. | A macro storing `dept_calendar,acme/secret` keeps `acme/secret` through every tick and close, including with nothing ticked; a macro storing the id `11` now opens with that repository ticked. |
+| 1-3 | An `Error` escaped `catch (Exception)` into a dropped `Future`: no log line, and the row stayed RUNNING for good with Analyze disabled because of it. A kill or restart did the same. | A row planted as RUNNING and timestamped half an hour ago was released within 24 seconds; one with no timestamp within a minute. |
+| 1-2 | `usable > 0 && usable < MIN_FREE` stood down when the volume was full, which is what `getUsableSpace()` returning 0 means. And a clone over the ceiling was refused and kept for ever - the sweep only takes directories no registration owns. | Three tests, each confirmed to fail on its own assertion with the corresponding line reverted, including one pinning the over-correction: an unreadable volume is not a full one. |
 
-**The preview no longer asks for a render.** It used to work by clicking Confluence's Refresh
-link, which starts a server round trip that overwrites the whole frame. Confluence starts its
-own on dialog open, two can be in flight, the later to finish wins with whatever value it
-captured, and a field has no way to make its own request be the last write - that is what showed
-two repositories and then one. Now `code-quality.js` exports `CqApp.repaint` and the dialog,
-which is the frame's parent and same-origin, redraws it directly: no request, ordered by
-construction, instant on every tick. And it binds Confluence's own
-`macro-browser.preview-ready`, so whatever HTML lands last is immediately brought back in line
-with what is ticked. Racing is now harmless instead of merely unlikely. The Refresh-link path
-survives as the fallback for the one case a repaint cannot cover - an insert whose required
-parameter has been empty has no frame to paint into, because Confluence removes it.
+**Everything in sections 2 and 3 of the review is done** except what is listed as deferred
+below: the failure detail is administrators-only, the report no longer claims a span it did not
+measure, the count beside the findings says when it cut the list, the percentage axis picks its
+own precision, the poll no longer wipes an open form, the dialog's document handler retires with
+its picker, and the five hardcoded English sentences are localised.
 
-**Confluence's table enhancement was eating the first row, and that was the other half.** After
-the repaint went in, the reporter saw the first close of a fresh insert still show one row of
-two - and unticking and reticking fix it. The probe showed the app believing it had rendered
-both rows while the frame's table carried two `<thead>` elements: Confluence turns tables in
-rendered content into sortable ones, that pass runs in the preview frame *after* this script has
-drawn its rows, and it read the first data row as a second header row. One selected showed none,
-two showed one. Any repaint afterwards replaces the table with an unenhanced one, which is
-exactly why the second attempt always looked fine.
+**Deferred, with reasons, not forgotten.**
 
-Opting out would mean naming whatever selector Confluence happens to use. **The preview now
-draws no table at all** - a list of divs, which is what the narrow frame was laying the table
-out as anyway (its media query hides the header and makes every cell a block, so nothing a
-reader sees has changed). Not being a table is not something an enhancer can change its mind
-about. The page and the administration screen keep their tables: their render always happens
-after the enhancement pass, so they were never affected, and both were re-checked.
+- **2-6, `persistSuccess` writing tens of thousands of statements in one transaction.** The
+  diagnosis is right. It is also a rewrite of how this plugin uses Active Objects, it only
+  hurts at twenty thousand commits, and the regression risk today is larger than the win. Do it
+  when somebody feels it.
+- **2-4, an aggregate ceiling across repositories.** With the free-space check actually working,
+  the volume is what it was protecting. A byte cap over all clones is a policy knob nobody has
+  asked for, and it costs a full tree walk per run.
+- **2-8, legacy rows whose credential was only ever in the URL.** Worth a one-off migration; it
+  currently shows as a generic "not authorized", which is at least not wrong.
+- **3-6, the chart's resize observers on a language switch.** Real, and it leaks three handlers
+  per chart per switch on a page nobody keeps open for long.
+- **4-2 and 4-3, MirrorTrees' sample size and `MAX_PER_BASENAME`.** Both are reasonable
+  suggestions about a feature whose results are already published as a caveat.
 
-**`tools/macro-dialog-probe.js` is how all of this was established, and how to check it again.**
-It drives the real dialog over CDP - Chrome plus Node's built-in WebSocket, nothing installed -
-ticks the real boxes, and prints what the frame holds after each one plus every render request
-that went out. Screenshots cannot see any of it and four rounds of reasoning got it wrong; the
-probe found both faults in one run each. Two things it reports deliberately: `app=` beside
-`drawn=`, because those disagreeing is what exposed the enhancement, and `tables=`, which must
-stay `0` in the preview. It runs with the cache off by default. What it reports now, on both a
-fresh insert and an edit with one repository stored:
+**Two things are still unverified and both are honest gaps.** The non-administrator permission
+path could not be exercised here: there is no such account on this instance, and both
+repositories have no spaces linked, which makes every non-administrator answer the same empty
+one. And `report.js` has no test harness at all - the tick formatter was checked by running the
+function, not by a test that would catch its next change.
 
-    first close after a fresh open   the full selection, app == drawn, tables=0
-                                     (insert: one server render; edit: none, it repaints)
-    every tick after that            repaints at once, app == drawn, no render at all
-    untick everything                no rows and the "choose one or more" line
-
-Also confirmed in the same pass: the page no longer offers Delete (3-A), and the preview note
-says deleting lives on the administration screen. A repository whose stored name was hand-typed
-displays as `owner/repo` - that cannot be seen on this instance any more because `captureV`, the
-only such row, was deleted during testing, and a fresh registration derives its name so the
-difference will not reappear.
+**Do not test a wrong password against this instance.** Doing it once to check `deploy.sh`'s
+error path pushed `bskim` past Confluence's failed-login threshold and basic auth started
+answering 401 with `X-Seraph-LoginReason: AUTHENTICATION_DENIED` - which looks exactly like a
+broken deploy script. Neither resetting `cwd_user_attribute.invalidPasswordAttempts` nor a
+restart clears it; the counter that matters is `logininfo.curfailed`, keyed by the user key from
+`user_mapping`, and it was at 16. Set it to 0 and basic auth works again immediately.
 
 ## Next, in order
 
