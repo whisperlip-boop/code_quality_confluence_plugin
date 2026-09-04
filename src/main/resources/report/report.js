@@ -286,6 +286,32 @@
      * stopped the ladder below the max, which drew the duplication line outside its own panel -
      * a chart that silently clips its own data is worse than no chart.
      */
+    /**
+     * Decimals enough for a tick scale to read as different numbers.
+     *
+     * A duplication axis topping out at 0.04% was labelled 0.0%, 0.0%, 0.0% with one decimal,
+     * so the axis said the value was zero while the crosshair beside it said 0.04. Fixed
+     * precision cannot serve both a 40% scale and a 0.04% one; the scale decides.
+     */
+    function tickDigits(ticks, atLeast) {
+        for (var digits = atLeast; digits < 4; digits++) {
+            var seen = {};
+            var clash = false;
+            for (var i = 0; i < ticks.length; i++) {
+                var shown = ticks[i].toFixed(digits);
+                if (seen[shown]) {
+                    clash = true;
+                    break;
+                }
+                seen[shown] = true;
+            }
+            if (!clash) {
+                return digits;
+            }
+        }
+        return 4;
+    }
+
     function niceTicks(max, count) {
         if (!(max > 0)) {
             return [0, 1];
@@ -457,13 +483,26 @@
 
     function kpiTile(kpi) {
         var decimals = KPI_DECIMALS[kpi.key];
+        /*
+         * How far back the comparison reaches. Read for nullness, not truthiness: the builder
+         * sends 0 when the reference commit is within half a day of HEAD, and a young
+         * repository whose whole history arrived in one afternoon was having "+42.9% vs 90d
+         * ago" written under it. 90 remains the fallback for a report that carries no span at
+         * all, which is one written before this field existed.
+         */
+        function deltaSpan(tile) {
+            var days = tile.detail && tile.detail.windowDays !== null
+                    && tile.detail.windowDays !== undefined
+                ? tile.detail.windowDays : 90;
+            return days < 1 ? t('label.deltaToday') : t('label.delta', [days]);
+        }
+
         var deltaNode = null;
         if (kpi.delta !== null && kpi.delta !== undefined) {
             var sign = kpi.delta > 0 ? '+' : '';
             deltaNode = h('div', { 'class': 'kpi-delta' }, [
                 h('span', { text: sign + fmt(kpi.delta, 1) + '%' }),
-                h('small', { text: t('label.delta',
-                    [kpi.detail && kpi.detail.windowDays ? kpi.detail.windowDays : 90]) })
+                h('small', { text: deltaSpan(kpi) })
             ]);
         }
 
@@ -640,8 +679,9 @@
             gridAndAxis(svg, top, topTicks, topMax, function (v) {
                 return fmt(v, 0);
             });
+            var pctDigits = tickDigits(bottomTicks, 1);
             gridAndAxis(svg, bottom, bottomTicks, bottomMax, function (v) {
-                return fmt(v, 1) + '%';
+                return fmt(v, pctDigits) + '%';
             });
 
             var lastIndex = commits.length - 1;
@@ -1030,11 +1070,24 @@
             + (line ? '#L' + line : '');
     }
 
+    /*
+     * The builder shows the five worst and sends how many there were. This used to print the
+     * length of the list it was handed, so a repository with nine findings said "5" - which
+     * reads as five findings rather than five of nine, and there is already a string for
+     * saying it properly.
+     */
+    function findingsCount() {
+        var shown = R.findings.length;
+        var total = R.findingsTotal === null || R.findingsTotal === undefined
+            ? shown : R.findingsTotal;
+        return total > shown ? t('label.findings', [shown, total]) : shown + '';
+    }
+
     function findingsSection() {
         var card = h('div', { 'class': 'card' }, [
             h('div', { 'class': 'card-head' }, [
                 h('h2', { text: t('section.findings') }),
-                h('span', { 'class': 'eyebrow eyebrow-plain', text: R.findings.length + '' })
+                h('span', { 'class': 'eyebrow eyebrow-plain', text: findingsCount() })
             ])
         ]);
         var worded = (bundle(LANG) || {}).findings || [];

@@ -441,6 +441,9 @@ MESSAGES = [
      "Greyed points are still inside the 14-day window.",
      "회색 구간은 아직 14일 관측 창 안이다."),
     ("cq.label.delta", "vs {0}d ago", "{0}일 전 대비"),
+    # When the reference commit is less than a day back, which is what a repository whose whole
+    # history arrived in one afternoon looks like. "vs 0d ago" is not a comparison.
+    ("cq.label.deltaToday", "vs earlier today", "오늘 중 대비"),
     # Shown where a change would be, when there is nothing to compare against. A "0.0%" there
     # reads as "measured, and it did not move".
     ("cq.label.noBaseline", "No comparable baseline", "비교 기준선 없음"),

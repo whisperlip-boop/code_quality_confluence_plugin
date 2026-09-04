@@ -63,7 +63,14 @@ public final class ReportBuilder
         report.put("series", series(all));
         report.put("clones", clones(outcome.headClones));
         report.put("authors", authors(outcome));
-        report.put("findings", findings(agg, outcome, all, thresholds));
+        List<Map<String, Object>> allFindings = findings(agg, outcome, all, thresholds);
+        report.put("findings", allFindings.size() > MAX_FINDINGS
+                ? new ArrayList<Map<String, Object>>(allFindings.subList(0, MAX_FINDINGS))
+                : allFindings);
+        // What the count beside the heading has to say. Without it the heading reported the
+        // length of the list it was shown - always five when there were more, which reads as
+        // "five findings" rather than "five of nine shown".
+        report.put("findingsTotal", allFindings.size());
         report.put("caveats", caveats(agg, all, outcome));
         report.put("thresholds", thresholds);
         return new Gson().toJson(report);
@@ -892,13 +899,20 @@ public final class ReportBuilder
         errParams.put("density", round(a.errDensity, 2));
         findings.add(finding(a.stateErr, "errorHandling", errParams, ""));
 
-        if (!Thresholds.UNKNOWN.equals(a.stateConn))
+        // A drift needs a span to have drifted over. referenceDays is 0 when the reference
+        // commit is within half a day of HEAD, and "moved 12% over 0 days" is not a claim
+        // about a trend - it is two measurements of nearly the same tree.
+        if (!Thresholds.UNKNOWN.equals(a.stateConn) && a.referenceDays >= 1)
         {
             Map<String, Object> connParams = new LinkedHashMap<String, Object>();
             connParams.put("from", round(a.connThen, 1));
             connParams.put("to", round(a.connDensity, 1));
             connParams.put("delta", round(a.connDeltaPct, 1));
-            connParams.put("windowDays", t.windowDays);
+            // referenceDays, not the configured window: the comparison is against the
+            // reference commit, and how far back that landed is what the KPI tile reports. The
+            // two disagreeing put "vs 300d ago" on the tile and "over 90 days" in the finding
+            // right beneath it.
+            connParams.put("windowDays", a.referenceDays);
             findings.add(finding(a.stateConn, "connectivityDrift", connParams, ""));
         }
 
@@ -985,9 +999,11 @@ public final class ReportBuilder
                         - priority(String.valueOf(y.get("code")));
             }
         });
-        return findings.size() > 5 ? new ArrayList<Map<String, Object>>(findings.subList(0, 5))
-                : findings;
+        return findings;
     }
+
+    /** How many findings the report shows. The count beside them says when it cut the list. */
+    private static final int MAX_FINDINGS = 5;
 
     private static final List<String> FINDING_PRIORITY = java.util.Arrays.asList(
             "bundleFile", "crossFileClone", "cloneConcentration", "busFactor",
