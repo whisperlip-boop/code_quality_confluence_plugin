@@ -504,8 +504,14 @@ opening the dialog shows that.
 ## Where to pick this up
 
 Everything from both code reviews is closed, and so are the three follow-up steps. The macro
-preview is now verified end to end against the running instance. Two known limitations remain
-and there are no open defects.
+preview is verified end to end against the running instance **and confirmed by the reporter on
+2026-09-04**: ticking a box shows the right repositories immediately, on a fresh insert and on
+an edit alike. Two known limitations remain and there are no open defects.
+
+It took four attempts, and only the first was a fault in this plugin's own logic. The other
+three were the environment lying: a browser pinned to a pre-deploy copy of the file, and
+Confluence rewriting the rendered table. Both are written up below, because neither is visible
+from a screenshot and both will happen again to anyone working on this dialog.
 
 **Read this before believing any screen.** Re-installing the same plugin version leaves the
 browser running the previous build's JavaScript, and reloading does not fix it. Confluence keys
