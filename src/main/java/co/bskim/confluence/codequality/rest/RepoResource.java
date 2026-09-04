@@ -295,12 +295,16 @@ public class RepoResource
             token = remote.embeddedSecret;
         }
         int id = integer(input, "id");
-        if (token.isEmpty() && id > 0)
+        // Editing an existing repository without retyping the token - but only for the remote
+        // that token belongs to. The URL here is whatever the caller sent, independent of the
+        // id, so reusing the stored token against a different host would hand somebody's access
+        // token to that host. That is the one thing toDto promises never happens.
+        RepoSnapshot stored = id > 0 ? repositories.byId(id) : null;
+        if (token.isEmpty() && stored != null && RemoteUrl.sameRemote(url, stored.url))
         {
-            // Editing an existing repository without retyping the token.
             try
             {
-                token = repositories.authFor(repositories.byId(id)).token;
+                token = repositories.authFor(stored).token;
             }
             catch (TokenCipher.TokenUnreadableException e)
             {

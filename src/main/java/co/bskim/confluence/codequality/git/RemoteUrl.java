@@ -254,6 +254,26 @@ public final class RemoteUrl
     }
 
     /**
+     * Whether two URLs name the same remote, for deciding what a stored credential may be used
+     * for.
+     *
+     * <p>The probe endpoint takes a URL and a repository id as independent inputs, so that a
+     * form being edited can re-check a remote without the administrator retyping the token. The
+     * stored token belongs to the stored remote and nowhere else: used against the URL in the
+     * request, it would carry a {@code Authorization: Basic} header for somebody's private
+     * access token to whatever host was typed. Confirmed against the running instance before
+     * this existed - a probe naming an unrelated host answered {@code tokenOffered: true}.</p>
+     *
+     * <p>An empty or unparseable URL matches nothing, so a missing stored URL cannot authorise
+     * a request by comparing equal to another blank.</p>
+     */
+    public static boolean sameRemote(String one, String two)
+    {
+        String left = canonical(one);
+        return !left.isEmpty() && left.equals(canonical(two));
+    }
+
+    /**
      * True when the URL's userinfo has to be treated as a credential.
      *
      * <p>Scheme-dependent, for the reason given in {@link #parse}: under https anything in the

@@ -201,4 +201,52 @@ public class RemoteUrlTest
                 RemoteUrl.carriesSecret("https://github.com/acme/bil:ling.git"));
         assertFalse(RemoteUrl.carriesSecret(null));
     }
+
+    /**
+     * What a stored credential may be used for.
+     *
+     * <p>The probe endpoint takes a URL and a repository id separately, so this decides whether
+     * the token belonging to that id may be offered to that URL. Before it existed, a probe
+     * naming an unrelated host was answered with the stored token - confirmed against the
+     * running instance, which reported {@code tokenOffered: true} for
+     * {@code https://10.255.255.1/attacker/x.git} carrying repository 3's id.</p>
+     */
+    @Test
+    public void aStoredTokenIsOnlyForTheRemoteItWasStoredFor()
+    {
+        String stored = "https://github.com/acme/api.git";
+
+        assertTrue("the same remote, written the same way",
+                RemoteUrl.sameRemote(stored, "https://github.com/acme/api.git"));
+        assertTrue("a trailing .git does not move a repository",
+                RemoteUrl.sameRemote(stored, "https://github.com/acme/api"));
+        assertTrue("nor does a trailing slash",
+                RemoteUrl.sameRemote(stored, "https://github.com/acme/api/"));
+        assertTrue("nor does the case of the host",
+                RemoteUrl.sameRemote(stored, "https://GitHub.com/acme/api.git"));
+        assertTrue("nor does rotating the credential in the URL",
+                RemoteUrl.sameRemote(stored, "https://x-access-token:ghp_new@github.com/acme/api.git"));
+
+        assertFalse("another host must not receive it",
+                RemoteUrl.sameRemote(stored, "https://10.255.255.1/acme/api.git"));
+        assertFalse("nor another owner on the same host",
+                RemoteUrl.sameRemote(stored, "https://github.com/someone-else/api.git"));
+        assertFalse("nor another repository of the same owner",
+                RemoteUrl.sameRemote(stored, "https://github.com/acme/api-fork.git"));
+        assertFalse("case matters in the path, because it does to a server",
+                RemoteUrl.sameRemote(stored, "https://github.com/acme/API.git"));
+        assertFalse("and a host that merely ends the same is a different host",
+                RemoteUrl.sameRemote(stored, "https://evilgithub.com/acme/api.git"));
+    }
+
+    /** A missing stored URL must not compare equal to anything, blank included. */
+    @Test
+    public void nothingIsTheSameRemoteAsAMissingOne()
+    {
+        assertFalse(RemoteUrl.sameRemote(null, null));
+        assertFalse(RemoteUrl.sameRemote("", ""));
+        assertFalse(RemoteUrl.sameRemote("   ", ""));
+        assertFalse(RemoteUrl.sameRemote("https://github.com/acme/api.git", null));
+        assertFalse(RemoteUrl.sameRemote(null, "https://github.com/acme/api.git"));
+    }
 }
