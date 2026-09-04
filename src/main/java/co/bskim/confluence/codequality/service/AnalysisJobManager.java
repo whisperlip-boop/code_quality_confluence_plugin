@@ -1,6 +1,7 @@
 package co.bskim.confluence.codequality.service;
 
 import co.bskim.confluence.codequality.analysis.AnalysisConfig;
+import co.bskim.confluence.codequality.ao.CqRepo;
 import co.bskim.confluence.codequality.analysis.AnalysisEngine;
 import co.bskim.confluence.codequality.analysis.PathMatcher;
 import co.bskim.confluence.codequality.analysis.Thresholds;
@@ -11,13 +12,17 @@ import org.eclipse.jgit.lib.Repository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.DisposableBean;
+import org.springframework.beans.factory.InitializingBean;
 
 import javax.inject.Inject;
 import javax.inject.Named;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -30,7 +35,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * wait their turn, which is fine because nobody is watching a progress bar for four minutes.</p>
  */
 @Named
-public class AnalysisJobManager implements DisposableBean
+public class AnalysisJobManager implements InitializingBean, DisposableBean
 {
     private static final Logger log = LoggerFactory.getLogger(AnalysisJobManager.class);
 
@@ -45,10 +50,22 @@ public class AnalysisJobManager implements DisposableBean
         volatile boolean cancelled;
     }
 
+    /** How often a live job says it is still working - see {@link CqRepo#getStatusAt}. */
+    private static final long HEARTBEAT_SECONDS = 60;
+    /**
+     * How long a RUNNING row may go unrenewed before startup stops believing it.
+     *
+     * <p>Generous against the heartbeat, because the cost of the two mistakes is not the same:
+     * releasing a row a live job still owns would let a second run start against the same
+     * clone, while leaving one held a few minutes longer costs a wait.</p>
+     */
+    private static final long STALE_AFTER_MILLIS = 10 * 60 * 1000L;
+
     private final Map<Integer, JobState> jobs = new ConcurrentHashMap<Integer, JobState>();
     private final RepositoryService repositories;
     private final GitClient gitClient;
     private final ExecutorService executor;
+    private final ScheduledExecutorService heartbeat;
 
     @Inject
     public AnalysisJobManager(RepositoryService repositories, GitClient gitClient)
@@ -68,6 +85,70 @@ public class AnalysisJobManager implements DisposableBean
                 return thread;
             }
         });
+        this.heartbeat = Executors.newSingleThreadScheduledExecutor(runnable ->
+        {
+            Thread thread = new Thread(runnable, "code-quality-heartbeat");
+            thread.setDaemon(true);
+            return thread;
+        });
+    }
+
+    @Override
+    public void afterPropertiesSet()
+    {
+        // From now, not only at startup. A row left RUNNING by a node that died still has a
+        // fresh timestamp for the first few minutes, so a startup-only sweep would believe it
+        // and then never look again - the row would be stuck exactly as before. Reconciling on
+        // a timer is also what makes the claim mean something on a cluster.
+        heartbeat.scheduleWithFixedDelay(this::reconcileStatuses, 0, HEARTBEAT_SECONDS,
+                TimeUnit.SECONDS);
+    }
+
+    /** Repositories a job here is actually working on - finished entries linger in the map. */
+    private List<Integer> liveRepoIds()
+    {
+        List<Integer> live = new ArrayList<Integer>();
+        for (Map.Entry<Integer, JobState> entry : jobs.entrySet())
+        {
+            String status = entry.getValue().status;
+            if (RepositoryService.STATUS_QUEUED.equals(status)
+                    || RepositoryService.STATUS_RUNNING.equals(status))
+            {
+                live.add(entry.getKey());
+            }
+        }
+        return live;
+    }
+
+    /**
+     * Renews the claim of every live job, then withdraws the ones nobody renewed.
+     *
+     * <p>A RUNNING row says some node is working on this repository. The first half is how a
+     * job here keeps saying so - including during the clone, which reports no progress of its
+     * own and is the longest a run can go without a word. The second half is what finally
+     * releases a row whose node stopped: an Error, a kill, a restart. Without it the row is
+     * permanent, and because the client disables Analyze for a running repository there is no
+     * way back through the interface at all.</p>
+     *
+     * <p>Live first, then stale, so a job on this node can never release its own row. Failure
+     * is logged and swallowed: this runs every minute, and the next pass will do.</p>
+     */
+    private void reconcileStatuses()
+    {
+        try
+        {
+            repositories.touchStatus(liveRepoIds());
+            int released = repositories.failStaleRunning(STALE_AFTER_MILLIS);
+            if (released > 0)
+            {
+                log.info("Released {} repository row(s) left running by a stopped node",
+                        released);
+            }
+        }
+        catch (Exception e)
+        {
+            log.debug("Could not reconcile repository statuses", e);
+        }
     }
 
     /**
@@ -113,9 +194,14 @@ public class AnalysisJobManager implements DisposableBean
                 state.message = "Cancelled";
                 repositories.markStatus(repoId, RepositoryService.STATUS_FAILED, "Cancelled");
             }
-            catch (Exception e)
+            catch (Throwable e)
             {
-                log.warn("Code quality analysis failed for repository {}", repoId, e);
+                // Throwable, not Exception. An OutOfMemoryError is the failure the clone
+                // ceiling exists to prevent, and it used to escape into a Future nobody reads:
+                // no log line, and the row stayed RUNNING for good with Analyze disabled
+                // because of it. Recording it costs one small write, which is worth attempting
+                // even on a node that may now be unwell.
+                log.error("Code quality analysis failed for repository {}", repoId, e);
                 String message = describe(e);
                 state.status = RepositoryService.STATUS_FAILED;
                 state.message = message;
@@ -240,7 +326,7 @@ public class AnalysisJobManager implements DisposableBean
         jobs.remove(repoId);
     }
 
-    private static String describe(Exception e)
+    private static String describe(Throwable e)
     {
         String message = e.getMessage();
         if (message == null || message.isEmpty())
@@ -257,6 +343,7 @@ public class AnalysisJobManager implements DisposableBean
         {
             state.cancelled = true;
         }
+        heartbeat.shutdownNow();
         executor.shutdownNow();
         try
         {

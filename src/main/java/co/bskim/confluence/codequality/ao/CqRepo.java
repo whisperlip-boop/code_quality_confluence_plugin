@@ -71,6 +71,19 @@ public interface CqRepo extends Entity
     String getStatusMessage();
     void setStatusMessage(String statusMessage);
 
+    /**
+     * When the status was last written or a live job last said it was still working.
+     *
+     * <p>A RUNNING row is a claim that some node is working on this repository, and nothing
+     * used to withdraw that claim when the node stopped: an Error inside the job, a kill, a
+     * restart, and the row stayed RUNNING for good, with the Analyze button disabled because
+     * of it. A timestamp is what makes the claim checkable. A live job refreshes it, so the
+     * check is safe on a cluster too - a run on another node keeps its own row fresh, and only
+     * a claim nobody has renewed is treated as abandoned.</p>
+     */
+    Long getStatusAt();
+    void setStatusAt(Long statusAt);
+
     @StringLength(255)
     String getCreatedBy();
     void setCreatedBy(String createdBy);

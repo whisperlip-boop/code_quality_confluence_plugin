@@ -21,6 +21,7 @@ import org.slf4j.LoggerFactory;
 import javax.inject.Inject;
 import javax.inject.Named;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -267,9 +268,75 @@ public class RepositoryService
             {
                 repo.setStatus(status);
                 repo.setStatusMessage(message == null ? "" : message);
+                repo.setStatusAt(System.currentTimeMillis());
                 repo.save();
             }
             return null;
+        });
+    }
+
+    /**
+     * Says that a job is still working, without changing what it is doing.
+     *
+     * <p>What makes a RUNNING row checkable - see {@link CqRepo#getStatusAt}. Called on a timer
+     * while a job is live, including during the clone, which reports no progress of its own and
+     * is the longest a run can go without saying anything.</p>
+     */
+    public void touchStatus(final Collection<Integer> repoIds)
+    {
+        if (repoIds.isEmpty())
+        {
+            return;
+        }
+        transactions.execute(() ->
+        {
+            long now = System.currentTimeMillis();
+            for (Integer repoId : repoIds)
+            {
+                CqRepo repo = ao.get(CqRepo.class, repoId);
+                if (repo != null)
+                {
+                    repo.setStatusAt(now);
+                    repo.save();
+                }
+            }
+            return null;
+        });
+    }
+
+    /**
+     * Fails rows that claim to be running but that nobody has renewed.
+     *
+     * <p>Run once at startup. A row left RUNNING by a node that died is otherwise permanent:
+     * the client disables Analyze for a running repository, so there is no way back through the
+     * interface, and the administrator has to be told to edit the database. Rows written before
+     * this column existed have no timestamp and are treated as abandoned, which they are - no
+     * process from that era survives.</p>
+     *
+     * @param staleAfterMillis how long a claim may go unrenewed before it is not believed
+     * @return how many rows were released
+     */
+    public int failStaleRunning(final long staleAfterMillis)
+    {
+        return transactions.execute(() ->
+        {
+            long cutoff = System.currentTimeMillis() - staleAfterMillis;
+            int released = 0;
+            for (CqRepo repo : ao.find(CqRepo.class, Query.select()
+                    .where("STATUS = ? OR STATUS = ?", STATUS_RUNNING, STATUS_QUEUED)))
+            {
+                Long at = repo.getStatusAt();
+                if (at != null && at > cutoff)
+                {
+                    continue;
+                }
+                repo.setStatus(STATUS_FAILED);
+                repo.setStatusMessage("Interrupted");
+                repo.setStatusAt(System.currentTimeMillis());
+                repo.save();
+                released++;
+            }
+            return released;
         });
     }
 
