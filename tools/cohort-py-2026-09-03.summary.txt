@@ -6,3 +6,4 @@
    p75 5.46  leave-one-out worst shift +0.41 (benoitc_gunicorn)
    p85 7.85  leave-one-out worst shift +0.83 (encode_httpx)
    p90 11.69  leave-one-out worst shift +2.39 (encode_httpx)
+   rows with the verdict on each: tools/cohort-py-2026-09-03.rows.tsv

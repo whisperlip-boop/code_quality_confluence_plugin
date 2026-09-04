@@ -7,3 +7,4 @@
    p75 6.04  leave-one-out worst shift +0.22 (LMAX-Exchange_disruptor)
    p85 7.97  leave-one-out worst shift +0.37 (FasterXML_jackson-databind)
    p90 11.01  leave-one-out worst shift +0.49 (ReactiveX_RxJava)
+   rows with the verdict on each: tools/cohort-java-2026-09-03.rows.tsv

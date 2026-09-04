@@ -685,17 +685,19 @@ def check_message_format():
 
     Findings and caveats are worded server-side through java.text.MessageFormat, where a
     single quote is the escape character: "somebody's work" comes out as "somebodys work",
-    silently, in the finished report. Only strings with a {n} placeholder go through the
-    formatter, so only those are checked - and the fix is to reword rather than to write '',
-    which every future translator would have to know about.
+    silently, in the finished report. The fix is to reword rather than to write '', which
+    every future translator would have to know about.
+
+    Checked whether or not the value carries a {n}. Messages.format decides by the call, not
+    by the pattern - any arguments at all and the string is parsed - so a placeholder-free
+    caveat title reached the formatter and skipped the guard. The condition used to be "has a
+    placeholder", which is a property of the wrong side.
     """
     bad = []
     for key, english, korean in MESSAGES:
         if not (key.startswith("cq.finding.") or key.startswith("cq.caveat.")):
             continue
         for label, value in (("en", english), ("ko", korean)):
-            if not re.search(r"\{\d+\}", value):
-                continue
             stripped = value.replace("''", "")
             if "'" in stripped:
                 bad.append("%s (%s): %s" % (key, label, value[:70]))

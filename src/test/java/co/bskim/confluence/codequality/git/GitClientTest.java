@@ -14,7 +14,10 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
@@ -228,6 +231,37 @@ public class GitClientTest
         {
             cloned.close();
         }
+    }
+
+    /**
+     * The sweep removes what no registration owns, and nothing else.
+     *
+     * <p>It is handed the set of live ids and deletes every clone directory outside it, which
+     * makes the set the only thing standing between housekeeping and every clone on the node.
+     * A version of this that ignored the set, or was handed an empty one by mistake, would
+     * delete all of them and the next run of each would re-clone from scratch - slow, and
+     * silent, because re-cloning is what a first run looks like.</p>
+     */
+    @Test
+    public void theSweepKeepsTheClonesThatStillHaveRegistrations() throws Exception
+    {
+        File root = folder.newFolder("store");
+        for (int id : new int[] { 1, 2, 7 })
+        {
+            assertTrue(new File(root, id + ".git").mkdirs());
+        }
+        // Not a clone directory at all, and not this code's business.
+        assertTrue(new File(root, "notes").mkdirs());
+
+        Set<Integer> live = new HashSet<Integer>(Arrays.asList(1, 7));
+        assertEquals("only the one without a registration", 1,
+                clientRootedAt(root).discardOrphans(live));
+
+        assertTrue("a registered clone must survive", new File(root, "1.git").isDirectory());
+        assertTrue("all of them", new File(root, "7.git").isDirectory());
+        assertFalse("the orphan must be gone", new File(root, "2.git").exists());
+        assertTrue("and anything that is not a clone is left alone",
+                new File(root, "notes").isDirectory());
     }
 
     /**

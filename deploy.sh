@@ -23,8 +23,17 @@ QUALIFIER=".$(date -u +%Y%m%d%H%M%S)"
 JAR="$(ls -t target/*.jar | grep -v '\-tests' | head -1)"
 echo "업로드 대상: $JAR → $BASE"
 
+# 비밀번호를 -u로 넘기면 ps에 그대로 보인다. curl의 --config는 표준입력으로 받으므로
+# 커맨드라인에 남지 않는다. -f를 붙여 403/500을 성공과 구분한다.
+cq_curl() {
+    printf 'user = "%s:%s"\n' "$USER" "$PASS" | curl -s -f --config - "$@"
+}
+
 # UPM은 업로드 요청마다 일회성 토큰을 요구한다.
-TOKEN="$(curl -s -u "$USER:$PASS" -I "$BASE/rest/plugins/1.0/?os_authType=basic" \
+# 실패를 여기서 삼키는 이유: set -e가 아래 안내 문구 전에 스크립트를 죽이면 사용자는
+# 아무 설명 없는 종료만 보게 된다. 판정은 TOKEN이 비었는지로 한다.
+HEADERS="$(cq_curl -I "$BASE/rest/plugins/1.0/?os_authType=basic" 2>/dev/null || true)"
+TOKEN="$(printf '%s' "$HEADERS" \
     | tr -d '\r' | awk -F': ' 'tolower($1)=="upm-token"{print $2}')"
 
 if [ -z "$TOKEN" ]; then
@@ -32,16 +41,20 @@ if [ -z "$TOKEN" ]; then
     exit 1
 fi
 
-curl -s -u "$USER:$PASS" \
+if ! cq_curl \
     -H "Accept: application/json" \
     -H "X-Atlassian-Token: no-check" \
     -F "plugin=@$JAR" \
     "$BASE/rest/plugins/1.0/?token=$TOKEN" > /tmp/cq-upm-upload.json
+then
+    echo "업로드 요청이 거부됐다. 응답: $(cat /tmp/cq-upm-upload.json)" >&2
+    exit 1
+fi
 
 echo "업로드 요청 전송 완료. 설치 진행 상태:"
 for _ in $(seq 1 40); do
     sleep 3
-    STATUS="$(curl -s -u "$USER:$PASS" "$BASE/rest/plugins/1.0/$KEY-key" 2>/dev/null || true)"
+    STATUS="$(cq_curl "$BASE/rest/plugins/1.0/$KEY-key" 2>/dev/null || true)"
     if echo "$STATUS" | grep -q '"enabled":true'; then
         echo "설치·활성화 완료"
         echo

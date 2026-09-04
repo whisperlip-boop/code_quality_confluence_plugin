@@ -1,0 +1,39 @@
+repo	files	loc	dupLines	ratioPct	clones	topExt	topExtFiles	mirrors	included	excludeReason
+TanStack_query	556	49157	8802	17.91	293	ts	626	-	yes	-
+apollographql_apollo-client	470	114689	19596	17.09	906	ts	611	-	yes	-
+axios_axios	75	6829	10	0.15	1	js	192	-	yes	-
+babel_babel	807	90231	1054	1.17	60	js	14528	-	yes	-
+chalk_chalk	4	382	0	0.00	0	js	16	-	no	under 1000 measured lines (382)
+chartjs_Chart.js	95	15921	198	1.24	14	js	653	-	yes	-
+colinhacks_zod	169	31978	1484	4.64	88	ts	467	-	yes	-
+d3_d3	3	93	0	0.00	0	vue	21	-	no	bundle package that re-exports submodules: 93 lines
+date-fns_date-fns	1474	70441	7356	10.44	345	ts	1601	-	yes	-
+eslint_eslint	436	66753	1174	1.76	62	js	1477	-	yes	-
+expressjs_express	7	1139	10	0.88	1	js	141	-	yes	-
+fastify_fastify	50	9936	424	4.27	29	js	261	-	yes	-
+gulpjs_gulp	3	57	0	0.00	0	js	6	-	no	under 1000 measured lines (57)
+jestjs_jest	1211	57065	1540	2.70	82	js	1086	-	yes	-
+jquery_jquery	140	6851	94	1.37	5	js	227	-	yes	-
+koajs_koa	9	910	0	0.00	0	js	82	-	no	under 1000 measured lines (910)
+lodash_lodash	20	8602	22	0.26	2	js	55	-	yes	-
+moment_moment	364	36052	17290	47.96	495	js	771	-	no	ships its build output at the repository root - moment.js and locale/ are the compiled form of src/ - so the ratio measures its release process. No general exclude pattern can catch output at the root, and loosening the mirror thresholds enough to match a UMD wrapper would start swallowing real modules.
+mrdoob_three.js	902	122319	5540	4.53	308	js	1708	-	yes	-
+nodejs_undici	160	26869	652	2.43	38	js	566	-	yes	-
+nodemailer_nodemailer	38	10065	244	2.42	15	ts	95	-	yes	-
+pixijs_pixijs	734	62600	1342	2.14	79	ts	1505	-	yes	-
+pmndrs_zustand	17	1312	12	0.91	1	ts	21	-	yes	-
+preactjs_preact	69	5102	68	1.33	3	jsx	128	-	yes	-
+prettier_prettier	624	43186	372	0.86	20	js	5069	-	yes	-
+reduxjs_redux	20	1212	36	2.97	2	js	141	-	yes	-
+remix-run_react-router	533	155341	21288	13.70	1266	ts	456	-	yes	-
+rollup_rollup	342	34238	804	2.35	43	js	12294	-	yes	-
+sequelize_sequelize	378	41642	2108	5.06	103	ts	546	-	yes	-
+sindresorhus_got	25	7399	10	0.14	1	ts	79	-	yes	-
+socketio_socket.io	93	15842	1234	7.79	62	js	189	-	yes	-
+sveltejs_svelte	428	45051	1094	2.43	49	svelte	4542	-	yes	-
+trpc_trpc	264	24125	572	2.37	32	ts	740	-	yes	-
+typeorm_typeorm	561	81485	14050	17.24	626	ts	3587	-	yes	-
+validatorjs_validator.js	110	4126	54	1.31	3	js	130	-	yes	-
+vitejs_vite	231	44426	1046	2.35	28	js	936	-	yes	-
+vuejs_core	322	52976	694	1.31	36	ts	484	-	yes	-
+webpack_webpack	859	183182	7444	4.06	346	js	14475	-	yes	-

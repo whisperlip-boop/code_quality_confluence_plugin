@@ -9,3 +9,4 @@
    p75 4.53  leave-one-out worst shift +0.20 (TanStack_query)
    p85 8.32  leave-one-out worst shift +2.30 (TanStack_query)
    p90 13.05  leave-one-out worst shift +2.87 (TanStack_query)
+   rows with the verdict on each: tools/cohort-js-2026-09-03.rows.tsv

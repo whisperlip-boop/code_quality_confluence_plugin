@@ -1,0 +1,44 @@
+repo	files	loc	dupLines	ratioPct	clones	topExt	topExtFiles	mirrors	included	excludeReason
+FasterXML_jackson-databind	576	85287	3586	4.20	213	java	1370	-	yes	-
+LMAX-Exchange_disruptor	122	6938	528	7.61	25	java	240	-	yes	-
+OpenFeign_feign	301	21421	1708	7.97	60	java	584	-	yes	-
+ReactiveX_RxJava	1007	107246	16042	14.96	759	java	2072	-	yes	-
+alibaba_fastjson2	651	160745	24820	15.44	1282	java	4315	-	yes	-
+apache_commons-cli	36	3720	36	0.97	2	java	87	-	yes	-
+apache_commons-codec	85	9710	250	2.57	15	java	175	-	yes	-
+apache_commons-collections	367	33756	2360	6.99	95	java	678	-	yes	-
+apache_commons-compress	420	45320	736	1.62	47	java	709	-	yes	-
+apache_commons-csv	12	2471	14	0.57	1	java	56	-	yes	-
+apache_commons-io	272	20194	248	1.23	16	java	577	-	yes	-
+apache_commons-lang	263	32601	1264	3.88	82	java	626	-	yes	-
+apache_commons-math	669	63373	4122	6.50	236	java	1088	-	yes	-
+apache_commons-pool	54	6074	74	1.22	5	java	125	-	yes	-
+apache_commons-text	112	10774	1218	11.30	65	java	217	-	yes	-
+apache_dubbo	2390	193469	7464	3.86	389	java	4050	-	yes	-
+apache_maven	1568	130017	13594	10.46	476	java	3186	-	yes	-
+apache_pdfbox	967	125704	2412	1.92	147	java	1329	-	yes	-
+assertj_assertj	816	47801	1052	2.20	54	java	5146	-	yes	-
+awaitility_awaitility	78	2939	0	0.00	0	java	124	-	yes	-
+ben-manes_caffeine	481	54354	3126	5.75	149	java	710	-	yes	-
+bumptech_glide	378	34025	604	1.78	27	java	728	-	yes	-
+dromara_hutool	1551	108996	3228	2.96	156	java	2264	-	yes	-
+eclipse-vertx_vert.x	739	75671	1936	2.56	87	java	1271	-	yes	-
+google_auto	131	14748	228	1.55	11	java	319	-	yes	-
+google_dagger	1088	60180	3458	5.75	112	java	1538	-	yes	-
+google_error-prone	1064	117631	1980	1.68	122	java	2072	-	yes	-
+google_gson	103	12483	362	2.90	18	java	264	-	yes	-
+google_guava	1271	99361	4852	4.88	275	java	3275	android/guava~=guava(93789 lines)	yes	-
+h2database_h2database	885	160584	5436	3.39	292	java	1257	-	yes	-
+javaparser_javaparser	790	86642	9940	11.47	542	java	2009	-	yes	-
+jdbi_jdbi	708	26716	630	2.36	29	java	1301	-	yes	-
+jhy_jsoup	94	18395	246	1.34	14	java	197	-	yes	-
+junit-team_junit4	215	10775	64	0.59	4	java	471	-	yes	-
+mockito_mockito	514	24608	482	1.96	28	java	1003	-	yes	-
+netty_netty	2229	234322	10972	4.68	517	java	3588	-	yes	-
+projectlombok_lombok	443	50568	3054	6.04	158	java	1946	-	yes	-
+spring-projects_spring-retry	92	5000	30	0.60	2	java	160	-	yes	-
+square_moshi	1	2	0	0.00	0	kt	86	-	no	Kotlin project: 2 Java lines
+square_okhttp	17	129	0	0.00	0	kt	573	-	no	Kotlin project: 129 Java lines
+square_retrofit	156	7773	856	11.01	32	java	306	-	yes	-
+xerial_sqlite-jdbc	61	10240	76	0.74	5	java	103	-	yes	-
+zxing_zxing	358	37834	1318	3.48	77	java	523	-	yes	-

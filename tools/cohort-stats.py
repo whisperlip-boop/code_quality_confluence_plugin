@@ -44,9 +44,25 @@ def percentile(values, q):
     return ordered[low] + (ordered[high] - ordered[low]) * (pos - low)
 
 
+def write_annotated(path, header, annotated):
+    """The same rows with the verdict on each, so the numbers follow from one file.
+
+    The reasons used to live only in the printed summary, so the TSV on its own could not
+    reproduce a single published percentile - a reader had to apply the exclusion list by hand
+    to check the thresholds this plugin grades against. Generated rather than maintained: this
+    script is still the one place the rule is written down.
+    """
+    out = path[:-4] + ".rows.tsv" if path.endswith(".tsv") else path + ".rows.tsv"
+    with open(out, "w", encoding="utf-8") as handle:
+        handle.write("\t".join(header + ["included", "excludeReason"]) + "\n")
+        for cells, reason in annotated:
+            handle.write("\t".join(cells + ["no" if reason else "yes", reason or "-"]) + "\n")
+    return out
+
+
 def main():
     path, key = sys.argv[1], sys.argv[2]
-    rows, dropped = [], []
+    rows, dropped, notes, annotated = [], [], [], []
     with open(path, encoding="utf-8") as handle:
         header = handle.readline().rstrip("\n").split("\t")
         for line in handle:
@@ -55,24 +71,30 @@ def main():
                 continue
             row = dict(zip(header, cells))
             name = row["repo"]
+            reason = None
             if row.get("loc") in ("ERROR", None):
-                dropped.append((name, "probe failed"))
+                reason = "probe failed"
+            elif name in DROP:
+                reason = DROP[name]
+            elif int(row["loc"]) < MIN_LOC:
+                reason = "under %d measured lines (%s)" % (MIN_LOC, row["loc"])
+            annotated.append((cells, reason))
+            if reason:
+                dropped.append((name, reason))
                 continue
             loc, ratio = int(row["loc"]), float(row["ratioPct"])
-            if name in DROP:
-                dropped.append((name, DROP[name]))
-                continue
-            if loc < MIN_LOC:
-                dropped.append((name, "under %d measured lines (%d)" % (MIN_LOC, loc)))
-                continue
+            # Kept, and said so as a note rather than under "dropped" - it was being listed
+            # as dropped while still counting towards every percentile below.
             if row.get("topExt") and row["topExt"] not in EXT_OK[key]:
-                dropped.append((name, "dominant extension .%s, kept anyway" % row["topExt"]))
+                notes.append((name, "dominant extension .%s, kept" % row["topExt"]))
             rows.append((name, loc, ratio, row.get("mirrors", "-")))
 
     ratios = [r[2] for r in rows]
     print("== %s: n=%d" % (key, len(rows)))
     for name, reason in dropped:
         print("   dropped %-32s %s" % (name, reason))
+    for name, note in notes:
+        print("   note    %-32s %s" % (name, note))
     for name, loc, ratio, mirrors in rows:
         if mirrors and mirrors != "-":
             print("   mirror  %-32s %s" % (name, mirrors))
@@ -94,6 +116,9 @@ def main():
                 worst, culprit = abs(without - base), row[0]
         print("   %s %.2f  leave-one-out worst shift %+.2f (%s)"
               % (label, base, worst, culprit))
+
+    print("   rows with the verdict on each: " + write_annotated(path, header,
+            annotated))
 
 
 if __name__ == "__main__":
