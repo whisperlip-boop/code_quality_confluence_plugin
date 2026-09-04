@@ -352,13 +352,18 @@
                 return self.renderPreviewRow(repo);
             }));
         }
-        var columns = ['name', 'url', 'sync', 'status', 'actions'];
+        // Visibility is administration's business, so the column only exists there.
+        var admin = this.context === 'admin';
+        var columns = admin
+            ? ['name', 'url', 'scopes', 'sync', 'status', 'actions']
+            : ['name', 'url', 'sync', 'status', 'actions'];
         var cols = el('colgroup', null, columns.map(function (name) {
             return el('col', { 'class': 'cq-col-' + name });
         }));
         var head = el('thead', null, [el('tr', null, [
             el('th', { text: text('ui.header.name') }),
             el('th', { text: text('ui.header.url') }),
+            admin ? el('th', { text: text('ui.header.spaces') }) : null,
             el('th', { text: text('ui.header.lastSync') }),
             el('th', { text: text('ui.header.status') }),
             el('th', { text: text('ui.header.actions'), style: 'text-align:right' })
@@ -517,21 +522,29 @@
         if (repo.branch) {
             nameCell.push(el('span', { 'class': 'cq-branch', text: repo.branch }));
         }
-        // Visibility is a property worth seeing at a glance - on the screen where somebody
-        // can act on it. On a page it is just noise beside the repository's name.
-        var spaces = onAdminScreen
-            ? (repo.spaceKeys || '').split(',').filter(function (k) {
+        /*
+         * Visibility gets a column, not a tag glued to the name.
+         *
+         * Worth seeing at a glance on the screen where somebody can act on it - a registration
+         * with no space linked is administrators-only, and nothing else on the row says so. But
+         * inside the name cell it reads as part of the name, which is what it looked like:
+         * "whisperlip-boop/dept_calendar TEST ds". On a page it is not shown at all; a reader
+         * there cannot change it.
+         */
+        var spaceCell = [];
+        if (onAdminScreen) {
+            var spaces = (repo.spaceKeys || '').split(',').filter(function (k) {
                 return k !== '';
-            })
-            : [];
-        if (spaces.length === 0 && onAdminScreen) {
-            nameCell.push(el('span', {
-                'class': 'cq-scope cq-scope-private', text: text('ui.spacesAdminOnly')
-            }));
-        } else {
-            spaces.forEach(function (key) {
-                nameCell.push(el('span', { 'class': 'cq-scope', text: key }));
             });
+            if (spaces.length === 0) {
+                spaceCell.push(el('span', {
+                    'class': 'cq-scope cq-scope-private', text: text('ui.spacesAdminOnly')
+                }));
+            } else {
+                spaces.forEach(function (key) {
+                    spaceCell.push(el('span', { 'class': 'cq-scope', text: key }));
+                });
+            }
         }
 
         return el('tr', null, [
@@ -542,6 +555,7 @@
                         text: repo.url })
                     : el('span', { text: repo.url })
             ]),
+            onAdminScreen ? el('td', { 'class': 'cq-scopes' }, spaceCell) : null,
             el('td', { 'class': 'cq-sync', text: relativeTime(repo.lastSyncedAt) }),
             el('td', null, statusCell),
             el('td', null, [el('div', { 'class': 'cq-row-actions' }, actions)])

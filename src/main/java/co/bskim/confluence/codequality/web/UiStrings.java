@@ -15,7 +15,8 @@ import java.util.Map;
 public final class UiStrings
 {
     private static final String[] KEYS = {
-            "ui.repositories", "ui.header.name", "ui.header.url", "ui.header.lastSync",
+            "ui.repositories", "ui.header.name", "ui.header.url", "ui.header.spaces",
+            "ui.header.lastSync",
             "ui.header.status", "ui.header.actions", "ui.new", "ui.edit", "ui.delete",
             "ui.analyze", "ui.report", "ui.cancel", "ui.save", "ui.test", "ui.never",
             "ui.empty", "ui.emptyAdmin", "ui.noneSelected", "ui.pickInDialog",

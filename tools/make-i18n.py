@@ -61,12 +61,12 @@ MESSAGES = [
     ("cq.admin.back", "Back to Confluence", "Confluence로 돌아가기"),
 
     # --- repository table UI --------------------------------------------------
-    ("cq.ui.repositories", "Repositories", "Repositories"),
+    ("cq.ui.repositories", "Repositories", "레포지터리"),
     ("cq.ui.header.name", "Name", "이름"),
     ("cq.ui.header.url", "URL", "URL"),
     ("cq.ui.header.lastSync", "Last synchronized", "마지막 분석"),
     ("cq.ui.header.status", "Status", "상태"),
-    ("cq.ui.header.actions", "Actions", "Actions"),
+    ("cq.ui.header.actions", "Actions", "작업"),
     ("cq.ui.new", "New Repository", "레포지터리 추가"),
     ("cq.ui.edit", "Edit", "수정"),
     ("cq.ui.delete", "Delete", "삭제"),
@@ -221,6 +221,9 @@ MESSAGES = [
      "비공개 레포지터리에 필요하다. 암호화해 저장하고 브라우저로 되돌려주지 않는다."),
     ("cq.ui.form.tokenKeep", "A token is stored. Leave empty to keep it.",
      "저장된 토큰이 있다. 비워두면 그대로 유지한다."),
+    # A column of its own on the administration screen. It used to hang off the name, where a
+    # reader reads it as part of the name.
+    ("cq.ui.header.spaces", "Visible in", "보이는 범위"),
     ("cq.ui.form.spaces", "Visible in these spaces", "이 스페이스에서 보임"),
     ("cq.ui.form.spacesHint",
      "Whoever can view one of these spaces can see this repository and its report. Reuses "

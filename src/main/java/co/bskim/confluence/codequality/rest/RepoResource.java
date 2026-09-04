@@ -394,10 +394,30 @@ public class RepoResource
      * were pasted into the URL.</p>
      */
     /** {@code owner/repo} where the URL yields one, and the stored name where it does not. */
+    /**
+     * What every screen shows for a repository.
+     *
+     * <p>The stored name, and the URL only when there is no stored name to show. It used to be
+     * the other way round - derived first, stored as the fallback - which quietly overrode a
+     * name an administrator had typed into a field labelled "Repository name": the table and
+     * the picker showed {@code owner/repo} while the report, which is titled from the stored
+     * name, showed what was typed. Two names for one repository on two screens.</p>
+     *
+     * <p>Deriving first was a fix for a free-text macro parameter, where a reader had to guess
+     * which of two naming conventions a row happened to carry. That parameter is a picker now,
+     * so the guess is gone and the reason has expired. New registrations still get
+     * {@code owner/repo} without anyone typing it - see the create path, which derives when the
+     * field is left empty - so the consistency that mattered is kept where it belongs, at the
+     * point the name is chosen.</p>
+     */
     private static String label(RepoSnapshot repo)
     {
+        if (repo.name != null && !repo.name.trim().isEmpty())
+        {
+            return repo.name;
+        }
         String derived = deriveName(repo.url);
-        return derived == null || derived.isEmpty() ? repo.name : derived;
+        return derived == null ? "" : derived;
     }
 
     static String deriveName(String url)
