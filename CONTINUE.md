@@ -538,6 +538,15 @@ its picker, and the five hardcoded English sentences are localised.
 - **4-2 and 4-3, MirrorTrees' sample size and `MAX_PER_BASENAME`.** Both are reasonable
   suggestions about a feature whose results are already published as a caveat.
 
+**A registration is called what the repository is called.** The display used to derive
+`owner/repo` from the URL and override a name that had been typed into the field, while the
+report - titled from the stored name - did not. It now shows the stored name, and a registration
+made with the field empty gets the repository's own name, the last path segment, with the owner
+added back only when that would collide with an existing row. Which spaces a repository is
+visible in is not listed on the screen: a dozen linked spaces was a dozen chips of row height
+for something the edit form shows in full. What is shown is the one state nothing else reveals -
+a registration with no space linked is administrators-only, and it says so.
+
 **Two things are still unverified and both are honest gaps.** The non-administrator permission
 path could not be exercised here: there is no such account on this instance, and both
 repositories have no spaces linked, which makes every non-administrator answer the same empty

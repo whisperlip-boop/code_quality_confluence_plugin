@@ -352,18 +352,13 @@
                 return self.renderPreviewRow(repo);
             }));
         }
-        // Visibility is administration's business, so the column only exists there.
-        var admin = this.context === 'admin';
-        var columns = admin
-            ? ['name', 'url', 'scopes', 'sync', 'status', 'actions']
-            : ['name', 'url', 'sync', 'status', 'actions'];
+        var columns = ['name', 'url', 'sync', 'status', 'actions'];
         var cols = el('colgroup', null, columns.map(function (name) {
             return el('col', { 'class': 'cq-col-' + name });
         }));
         var head = el('thead', null, [el('tr', null, [
             el('th', { text: text('ui.header.name') }),
             el('th', { text: text('ui.header.url') }),
-            admin ? el('th', { text: text('ui.header.spaces') }) : null,
             el('th', { text: text('ui.header.lastSync') }),
             el('th', { text: text('ui.header.status') }),
             el('th', { text: text('ui.header.actions'), style: 'text-align:right' })
@@ -523,28 +518,24 @@
             nameCell.push(el('span', { 'class': 'cq-branch', text: repo.branch }));
         }
         /*
-         * Visibility gets a column, not a tag glued to the name.
+         * Which spaces are linked is not listed here.
          *
-         * Worth seeing at a glance on the screen where somebody can act on it - a registration
-         * with no space linked is administrators-only, and nothing else on the row says so. But
-         * inside the name cell it reads as part of the name, which is what it looked like:
-         * "whisperlip-boop/dept_calendar TEST ds". On a page it is not shown at all; a reader
-         * there cannot change it.
+         * The keys were a column of chips, and a repository linked to a dozen spaces made the
+         * row a dozen chips tall - unbounded height for information the edit form already
+         * shows in full. What is worth a row's space is the one state nothing else reveals: a
+         * registration with no space linked is administrators-only, which is deliberate and
+         * fail-closed and easy to forget having chosen. One short marker, on the
+         * administration screen, in the case that needs it.
          */
-        var spaceCell = [];
-        if (onAdminScreen) {
-            var spaces = (repo.spaceKeys || '').split(',').filter(function (k) {
-                return k !== '';
-            });
-            if (spaces.length === 0) {
-                spaceCell.push(el('span', {
-                    'class': 'cq-scope cq-scope-private', text: text('ui.spacesAdminOnly')
-                }));
-            } else {
-                spaces.forEach(function (key) {
-                    spaceCell.push(el('span', { 'class': 'cq-scope', text: key }));
-                });
-            }
+        var privateMarker = onAdminScreen
+                && (repo.spaceKeys || '').split(',').filter(function (k) {
+                    return k !== '';
+                }).length === 0
+            ? el('span', { 'class': 'cq-scope cq-scope-private',
+                text: text('ui.spacesAdminOnly') })
+            : null;
+        if (privateMarker) {
+            nameCell.push(privateMarker);
         }
 
         return el('tr', null, [
@@ -555,7 +546,6 @@
                         text: repo.url })
                     : el('span', { text: repo.url })
             ]),
-            onAdminScreen ? el('td', { 'class': 'cq-scopes' }, spaceCell) : null,
             el('td', { 'class': 'cq-sync', text: relativeTime(repo.lastSyncedAt) }),
             el('td', null, statusCell),
             el('td', null, [el('div', { 'class': 'cq-row-actions' }, actions)])

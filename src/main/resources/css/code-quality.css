@@ -58,10 +58,6 @@
     table-layout: fixed;
 }
 
-/*
- * Two column sets: the administration screen carries a visibility column the page does not, so
- * the widths are declared for both and the browser normalises whichever colgroup it is given.
- */
 .cq-table col.cq-col-name {
     /* Names have no spaces in them, so what they do not get in width they take in mid-word
        breaks: "field_template_jira_serv / er". The URL beside it is elided anyway. */
@@ -69,11 +65,7 @@
 }
 
 .cq-table col.cq-col-url {
-    width: 22%;
-}
-
-.cq-table col.cq-col-scopes {
-    width: 10%;
+    width: 25%;
 }
 
 .cq-table col.cq-col-sync {
@@ -81,7 +73,7 @@
 }
 
 .cq-table col.cq-col-status {
-    width: 14%;
+    width: 17%;
 }
 
 .cq-table col.cq-col-actions {
@@ -163,16 +155,6 @@
 }
 
 /* Who can see the row, next to its name. */
-.cq-scopes {
-    /* Its own cell now, so the chips wrap inside it rather than trailing off a name. */
-    padding: 12px 12px 12px 0;
-}
-
-.cq-scopes .cq-scope {
-    margin-left: 0;
-    margin-right: 4px;
-}
-
 .cq-scope {
     display: inline-block;
     margin: 2px 4px 0 0;

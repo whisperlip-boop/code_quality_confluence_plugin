@@ -28,6 +28,7 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -120,7 +121,7 @@ public class RepoResource
         }
         String name = string(input, "name");
         RepoSnapshot repo = repositories.create(
-                name.isEmpty() ? deriveName(url) : name,
+                name.isEmpty() ? availableName(url) : name,
                 url,
                 string(input, "branch"),
                 authUser,
@@ -410,6 +411,25 @@ public class RepoResource
      * field is left empty - so the consistency that mattered is kept where it belongs, at the
      * point the name is chosen.</p>
      */
+    /**
+     * A name for a registration whose form left the field empty.
+     *
+     * <p>The repository's own name, unless another registration already answers to it - two
+     * owners can both have an {@code api}, and two rows called {@code api} would be
+     * indistinguishable in the macro's picker as well as on the screen. The owner goes back on
+     * in that case, which is the only case that needs it.</p>
+     */
+    private String availableName(String url)
+    {
+        String bare = deriveName(url);
+        Set<String> taken = new HashSet<String>();
+        for (RepoSnapshot other : repositories.all())
+        {
+            taken.add(other.name);
+        }
+        return taken.contains(bare) ? deriveOwnerAndName(url) : bare;
+    }
+
     private static String label(RepoSnapshot repo)
     {
         if (repo.name != null && !repo.name.trim().isEmpty())
@@ -420,7 +440,37 @@ public class RepoResource
         return derived == null ? "" : derived;
     }
 
+    /**
+     * The repository's own name, as its host calls it.
+     *
+     * <p>The last path segment, so {@code https://github.com/whisperlip-boop/dept_calendar.git}
+     * is {@code dept_calendar}. It used to be {@code owner/repo}, which is unambiguous but is
+     * not what the repository is called anywhere else - its settings page, its clone directory
+     * and the person talking about it all say {@code dept_calendar}. The owner is added back
+     * only when the short name is already taken; see {@link #availableName}.</p>
+     */
     static String deriveName(String url)
+    {
+        List<String> parts = pathSegments(url);
+        return parts.isEmpty() ? url.trim() : parts.get(parts.size() - 1);
+    }
+
+    /** {@code owner/repo}, for when the repository's own name is not enough to tell it apart. */
+    static String deriveOwnerAndName(String url)
+    {
+        List<String> parts = pathSegments(url);
+        if (parts.isEmpty())
+        {
+            return url.trim();
+        }
+        if (parts.size() == 1)
+        {
+            return parts.get(0);
+        }
+        return parts.get(parts.size() - 2) + "/" + parts.get(parts.size() - 1);
+    }
+
+    private static List<String> pathSegments(String url)
     {
         String cleaned = url.trim();
         if (cleaned.endsWith(".git"))
@@ -457,15 +507,7 @@ public class RepoResource
                 parts.add(part.trim());
             }
         }
-        if (parts.isEmpty())
-        {
-            return url.trim();
-        }
-        if (parts.size() == 1)
-        {
-            return parts.get(0);
-        }
-        return parts.get(parts.size() - 2) + "/" + parts.get(parts.size() - 1);
+        return parts;
     }
 
     private Response invalidUrl(RemoteUrl.InvalidRemoteException e)
