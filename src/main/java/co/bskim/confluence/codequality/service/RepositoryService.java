@@ -527,13 +527,17 @@ public class RepositoryService
         return transactions.execute(() ->
         {
             Set<Integer> withReports = new HashSet<Integer>();
-            for (CqRun run : ao.find(CqRun.class, Query.select().where("STATUS = ?", "OK")))
+            // Two columns, and neither of them the report. It used to select whole rows and
+            // test getReportJson() for emptiness, which reads an unlimited CLOB per OK run to
+            // answer a question about its existence: a 20,000-commit repository's report is
+            // megabytes, thirty registrations is tens of them, and this runs on every page
+            // that hosts the macro. Existence is what the row already knows - persistSuccess
+            // writes the status and the report in one transaction, so an OK run with no report
+            // is not a state this code produces.
+            for (CqRun run : ao.find(CqRun.class, Query.select("REPO_ID")
+                    .where("STATUS = ? AND REPORT_JSON IS NOT NULL", "OK")))
             {
-                String json = run.getReportJson();
-                if (json != null && !json.isEmpty())
-                {
-                    withReports.add(run.getRepoId());
-                }
+                withReports.add(run.getRepoId());
             }
             return withReports;
         });

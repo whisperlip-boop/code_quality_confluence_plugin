@@ -237,9 +237,22 @@ define('code-quality/macro-browser-overrides',
                     close();
                 }
             });
-            // Closing on an outside click is scoped to this document, so several macro
-            // dialogs opened in a session do not fight over one handler.
-            $(document).on('click', function (event) {
+            /*
+             * One handler at a time, and it retires with its picker.
+             *
+             * A field is built afresh every time the dialog opens - the macro browser empties
+             * the form - and this used to add a handler per open and never remove one. The old
+             * ones kept working on detached pickers, where contains() is always false, so any
+             * click anywhere in the editor ran close() for every dialog ever opened, each
+             * reaching for the live preview link. The namespace makes the previous one
+             * removable and the connectedness check retires a handler whose picker has gone,
+             * including when the REST call failed and left the plain field.
+             */
+            $(document).off('click.cqPicker').on('click.cqPicker', function (event) {
+                if (!document.contains($picker[0])) {
+                    $(document).off('click.cqPicker');
+                    return;
+                }
                 if (!$picker[0].contains(event.target)) {
                     close();
                 }

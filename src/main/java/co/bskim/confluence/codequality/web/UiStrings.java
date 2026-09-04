@@ -23,7 +23,7 @@ public final class UiStrings
             "ui.keptUnseen",
             "ui.previewNote", "ui.filterNoMatch",
             "ui.filterAvailable",
-            "ui.confirmDelete", "ui.noReport", "ui.adminOnly",
+            "ui.confirmDelete", "ui.noReport", "ui.adminOnly", "ui.failedAskAdmin",
             "ui.probeOk", "ui.probePublic", "ui.probePublicToken", "ui.probeAuthed",
             "ui.probeFail", "ui.probing", "ui.probeNetwork", "ui.urlCredentialsMoved",
             "ui.probeError.notAuthorized", "ui.probeError.notFound",

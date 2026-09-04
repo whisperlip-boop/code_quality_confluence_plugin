@@ -231,8 +231,8 @@ public class RepoResource
         payload.put("phase", state != null ? state.phase : "");
         payload.put("current", state != null ? state.current : 0);
         payload.put("total", state != null ? state.total : 0);
-        payload.put("message", state != null && !state.message.isEmpty()
-                ? state.message : repo.statusMessage);
+        payload.put("message", failureDetail(state != null && !state.message.isEmpty()
+                ? state.message : repo.statusMessage));
         payload.put("lastSyncedAt", repo.lastSyncedAt);
         payload.put("hasReport", repositories.hasReport(id));
         return Response.ok(new Gson().toJson(payload)).build();
@@ -340,6 +340,21 @@ public class RepoResource
 
     // ------------------------------------------------------------------ helpers
 
+    /**
+     * A failure message, for the people who are allowed to read one.
+     *
+     * <p>It is the remote's or the filesystem's own words - {@code AnalysisJobManager.describe}
+     * takes them verbatim - so it carries things a space's readers have no business seeing:
+     * {@code https://gitlab.internal.corp:8443/platform/billing.git: not authorized} names an
+     * internal host, and a storage refusal reports how much disk this node has left. The probe
+     * endpoint already answers in categories for this reason; the list did not. Administrators
+     * still get the detail, and it is in the log either way.</p>
+     */
+    private String failureDetail(String message)
+    {
+        return access.isAdmin() ? (message == null ? "" : message) : "";
+    }
+
     private Map<String, Object> toDto(RepoSnapshot repo)
     {
         return toDto(repo, repositories.hasReport(repo.id));
@@ -366,7 +381,7 @@ public class RepoResource
         dto.put("excludes", repo.excludes);
         dto.put("thresholds", repo.thresholds);
         dto.put("status", repo.status);
-        dto.put("statusMessage", repo.statusMessage);
+        dto.put("statusMessage", failureDetail(repo.statusMessage));
         dto.put("lastSyncedAt", repo.lastSyncedAt);
         dto.put("hasReport", hasReport);
         return dto;

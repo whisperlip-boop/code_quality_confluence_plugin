@@ -441,7 +441,14 @@
         if (running && repo.progress) {
             statusCell.push(el('span', { 'class': 'cq-progress', text: repo.progress }));
         }
-        if (repo.status === 'FAILED' && repo.statusMessage) {
+        if (repo.status === 'FAILED' && !repo.statusMessage) {
+            // The detail is administrators-only - it is the remote's or the filesystem's own
+            // words and names internal hosts and free disk. Saying nothing at all beside a
+            // FAILED chip reads as a rendering bug, so say who can find out.
+            statusCell.push(el('span', {
+                'class': 'cq-fail-message', text: text('ui.failedAskAdmin')
+            }));
+        } else if (repo.status === 'FAILED' && repo.statusMessage) {
             statusCell.push(el('span', {
                 'class': 'cq-fail-message', title: repo.statusMessage,
                 text: repo.statusMessage
@@ -797,7 +804,11 @@
                     repo.lastSyncedAt = state.lastSyncedAt;
                     repo.hasReport = state.hasReport;
                 });
-                if (changed) {
+                // Not while a form is open. render() rebuilds it from self.editing, so a
+                // status arriving two seconds into typing a token threw the token away -
+                // along with the space picker, which then reloaded. The rows behind the form
+                // are already updated; they will be drawn when the form closes.
+                if (changed && !self.editing) {
                     self.render();
                 }
                 self.schedulePoll();

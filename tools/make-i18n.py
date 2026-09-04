@@ -121,6 +121,12 @@ MESSAGES = [
      "Delete {0}? The clone and every cached metric for it are removed.",
      "{0}을(를) 삭제한다. 클론과 캐시된 지표가 모두 지워진다."),
     ("cq.ui.noReport", "Run an analysis first.", "먼저 분석을 실행해야 한다."),
+    # A failed run's own words name internal hosts and this node's free disk, so only
+    # administrators are sent them. Without this the row showed a FAILED chip and nothing else,
+    # which reads as a rendering fault rather than a deliberate silence.
+    ("cq.ui.failedAskAdmin",
+     "The last analysis failed. An administrator can see why.",
+     "마지막 분석이 실패했다. 이유는 관리자가 확인할 수 있다."),
     ("cq.ui.adminOnly",
      "Only Confluence administrators can register or analyze repositories.",
      "레포지터리 등록과 분석은 Confluence 관리자만 할 수 있다."),
