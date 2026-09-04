@@ -15,6 +15,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -147,6 +148,86 @@ public class GitClientTest
                 readText(new File(client.repoDir(7), "config")).contains("ghp_leftover"));
     }
 
+    /**
+     * A clone over the ceiling is refused <em>and</em> reclaimed.
+     *
+     * <p>It used to be refused only. Nothing else removes it - the orphan sweep takes
+     * directories no registration owns and this one is owned - so registering a repository
+     * over the limit cost its whole size in disk permanently, recoverable only by finding it
+     * on the server. Every later attempt refused the same clone and left it there.</p>
+     */
+    @Test
+    public void anOversizeCloneIsReclaimedRatherThanLeftOnDisk() throws Exception
+    {
+        File origin = origin("bulky", "bulky_service.py");
+        GitClient client = clientRootedAt(folder.newFolder("store"), 1L, 0L);
+
+        try
+        {
+            client.sync(4, url(origin), RepoAuth.NONE).close();
+            fail("a clone over the ceiling has to be refused");
+        }
+        catch (GitClient.StorageLimitException expected)
+        {
+            assertTrue("the message has to name the size: " + expected.getMessage(),
+                    expected.getMessage().contains("MB"));
+        }
+
+        assertFalse("and the refused clone must not be left occupying disk",
+                client.repoDir(4).exists());
+    }
+
+    /**
+     * A full volume must stop a clone, not wave it through.
+     *
+     * <p>The guard read {@code usable > 0 && usable < MIN_FREE_BYTES}, and
+     * {@code getUsableSpace()} answers 0 when the volume is full - so it stood down in exactly
+     * the case it exists for. Four large repositories registered in a row is all it takes: the
+     * first three fill the disk and the fourth is told to go ahead.</p>
+     */
+    @Test
+    public void aFullVolumeRefusesTheClone() throws Exception
+    {
+        File origin = origin("gamma", "gamma_service.py");
+        GitClient client = clientWithSpace(folder.newFolder("full"), 0, 500L * 1024 * 1024 * 1024);
+
+        try
+        {
+            client.sync(5, url(origin), RepoAuth.NONE).close();
+            fail("no free space has to stop the clone");
+        }
+        catch (GitClient.StorageLimitException expected)
+        {
+            assertTrue("the message has to say how little is free: " + expected.getMessage(),
+                    expected.getMessage().contains("free"));
+        }
+    }
+
+    /**
+     * A figure that cannot be read is not a reason to refuse.
+     *
+     * <p>{@code getUsableSpace()} also answers 0 when it cannot see the partition at all, and
+     * refusing every clone on a filesystem that will not report its size would be worse than
+     * the guard is worth. {@code getTotalSpace()} is 0 only in that case, which is how the two
+     * are told apart.</p>
+     */
+    @Test
+    public void anUnreadableVolumeIsNotTreatedAsFull() throws Exception
+    {
+        File origin = origin("delta", "delta_service.py");
+        GitClient client = clientWithSpace(folder.newFolder("unknown"), 0, 0);
+
+        Repository cloned = client.sync(6, url(origin), RepoAuth.NONE);
+        try
+        {
+            assertTrue("the clone must go ahead", client.repoDir(6).isDirectory());
+        }
+        finally
+        {
+            cloned.close();
+        }
+    }
+
     // ------------------------------------------------------------------ helpers
 
     /**
@@ -161,6 +242,58 @@ public class GitClientTest
             public File storageRoot()
             {
                 return root;
+            }
+        };
+    }
+
+    /** Rooted, with the two ceilings set - a test can neither clone 4GB nor fill a volume. */
+    private static GitClient clientRootedAt(final File root, final long maxClone,
+                                            final long minFree)
+    {
+        return new GitClient(null)
+        {
+            @Override
+            public File storageRoot()
+            {
+                return root;
+            }
+
+            @Override
+            long maxCloneBytes()
+            {
+                return maxClone;
+            }
+
+            @Override
+            long minFreeBytes()
+            {
+                return minFree;
+            }
+        };
+    }
+
+    /** Rooted, with the disk figures dictated, so "full" and "unreadable" can be told apart. */
+    private static GitClient clientWithSpace(final File root, final long usable,
+                                             final long total)
+    {
+        return new GitClient(null)
+        {
+            @Override
+            public File storageRoot()
+            {
+                return root;
+            }
+
+            @Override
+            long usableSpace(File dir)
+            {
+                return usable;
+            }
+
+            @Override
+            long totalSpace(File dir)
+            {
+                return total;
             }
         };
     }

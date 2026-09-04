@@ -100,6 +100,31 @@ public class GitClient
         return new File(storageRoot(), repoId + ".git");
     }
 
+    /*
+     * The ceilings and the disk figures behind small overridable methods, the same seam
+     * storageRoot() already provides. A test cannot fill a volume or clone four gigabytes, and
+     * both of the faults these guards had were in the arithmetic rather than in the plumbing.
+     */
+    long minFreeBytes()
+    {
+        return MIN_FREE_BYTES;
+    }
+
+    long maxCloneBytes()
+    {
+        return MAX_CLONE_BYTES;
+    }
+
+    long usableSpace(File dir)
+    {
+        return dir.getUsableSpace();
+    }
+
+    long totalSpace(File dir)
+    {
+        return dir.getTotalSpace();
+    }
+
     /**
      * Clones on first use, fetches afterwards, and hands back an open bare repository.
      *
@@ -118,11 +143,16 @@ public class GitClient
             throws IOException, GitAPIException
     {
         File dir = repoDir(repoId);
-        long usable = storageRoot().getUsableSpace();
-        if (usable > 0 && usable < MIN_FREE_BYTES)
+        File root = storageRoot();
+        long usable = usableSpace(root);
+        // getUsableSpace() answers 0 both when the volume is full and when it cannot be read,
+        // and this used to skip the check for either - so the guard stood down in exactly the
+        // case it exists for. getTotalSpace() is 0 only in the second case, which is the one
+        // there is nothing to be done about.
+        if (totalSpace(root) > 0 && usable < minFreeBytes())
         {
             throw new StorageLimitException("Only " + megabytes(usable)
-                    + "MB free where clones are kept; " + megabytes(MIN_FREE_BYTES)
+                    + "MB free where clones are kept; " + megabytes(minFreeBytes())
                     + "MB is required before starting. Free space or move the Confluence home.");
         }
         if (new File(dir, "config").isFile() && !clonedFrom(dir, url))
@@ -174,14 +204,25 @@ public class GitClient
     private void checkSize(Repository repository, File dir) throws IOException
     {
         long size = sizeOf(dir);
-        if (size <= MAX_CLONE_BYTES)
+        if (size <= maxCloneBytes())
         {
             return;
         }
         repository.close();
+        // Reclaimed, not left behind. This clone will never be analysed, and nothing else
+        // removes it: the orphan sweep only takes directories no registration owns, and this
+        // one is owned. Registering a repository over the ceiling used to cost its whole size
+        // in disk, for good, recoverable only by finding it on the server. The next attempt
+        // pays for another clone, which is the right way round - a refused run should not be
+        // holding gigabytes while it is refused.
+        if (!deleteRecursively(dir))
+        {
+            log.warn("Could not remove the oversize clone at {}; it will occupy disk until "
+                    + "removed by hand", dir);
+        }
         throw new StorageLimitException("The clone is " + megabytes(size) + "MB, over the "
-                + megabytes(MAX_CLONE_BYTES) + "MB limit for one repository. Analyse a smaller "
-                + "repository, or raise the limit if this node has the disk for it.");
+                + megabytes(maxCloneBytes()) + "MB limit for one repository. This repository is "
+                + "too large to analyse on this node.");
     }
 
     private static long sizeOf(File file)
