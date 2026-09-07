@@ -1084,6 +1084,37 @@
      * reads as five findings rather than five of nine, and there is already a string for
      * saying it properly.
      */
+    /**
+     * The sentence under a grade badge: which number decided it, and what it is measured
+     * against.
+     *
+     * The builder decides - the rule that picked the axis is the same code that knows the
+     * number it picked on - so this only formats what it sent. A grade with no reason is a
+     * good or unknown one, which has nothing to explain.
+     */
+    function gradeReason(grade) {
+        var why = grade.reason;
+        if (!why) {
+            return '';
+        }
+        if (why.kind === 'bus') {
+            return t('label.whyBus', [fmt(why.busFactor, 0)]);
+        }
+        if (why.kind === 'lines') {
+            return t('label.whyLines', [fmt(why.delta, 0)]);
+        }
+        if (why.kind === 'metric') {
+            var digits = why.unit === 'perKloc' ? 2 : 1;
+            var shown = fmt(why.value, digits) + t('unit.' + why.unit);
+            var name = t('kpi.' + why.metric);
+            return why.limit === undefined || why.limit === null
+                ? t('label.whyMetricNoLimit', [name, shown])
+                : t('label.whyMetric', [name, shown, fmt(why.limit, digits)
+                    + t('unit.' + why.unit)]);
+        }
+        return '';
+    }
+
     function findingsCount() {
         var shown = R.findings.length;
         var total = R.findingsTotal === null || R.findingsTotal === undefined
@@ -1296,14 +1327,23 @@
 
         wrap.appendChild(h('div', { 'class': 'grades' }, R.grades.map(function (grade) {
             // Naming the axis is what makes a combined badge honest: "act" on its own leaves
-            // the reader guessing whether the level or the trend caused it.
-            var axis = grade.axis && grade.state !== 'good' && grade.state !== 'unknown'
+            // the reader guessing whether the level or the trend caused it. Naming it is not
+            // enough on its own either - "maintainability, act, error handling" still sends
+            // the reader down the page to find which number and which line, so the number and
+            // the line come with it.
+            var showAxis = grade.axis && grade.state !== 'good' && grade.state !== 'unknown';
+            var axis = showAxis
                 ? h('span', { 'class': 'grade-axis', text: t('axis.' + grade.axis) })
                 : null;
-            return h('div', { 'class': 'grade' }, [
+            var children = [
                 h('span', { 'class': 'grade-label', text: t('grade.' + grade.key) }),
                 h('span', { 'class': 'grade-verdict' }, [statusBadge(grade.state), axis])
-            ]);
+            ];
+            var why = gradeReason(grade);
+            if (why) {
+                children.push(h('div', { 'class': 'grade-why', text: why }));
+            }
+            return h('div', { 'class': 'grade' }, children);
         })));
 
         wrap.appendChild(h('section', null, [

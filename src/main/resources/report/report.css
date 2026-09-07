@@ -316,15 +316,28 @@ h1 {
 }
 
 .grade {
+    /*
+     * Wraps rather than sitting on one line, because the badge now brings a sentence with it:
+     * which number decided the grade and what it is measured against. The label and verdict
+     * stay on the first row and the reason takes the full width beneath.
+     */
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
+    gap: 4px 12px;
     padding: 14px 16px;
     border: 1px solid var(--border);
     border-radius: var(--radius);
     background: var(--surface);
     box-shadow: var(--shadow);
+}
+
+.grade-why {
+    flex-basis: 100%;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--ink-2);
 }
 
 .grade-label {

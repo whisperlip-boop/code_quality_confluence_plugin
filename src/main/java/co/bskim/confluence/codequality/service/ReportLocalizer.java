@@ -57,6 +57,8 @@ public final class ReportLocalizer
             "label.hideWhy", "label.noBaseline", "label.dupShare", "label.churnCensored",
             "label.bucketPartial",
             "label.findings", "label.deltaToday", "label.bucket", "label.fixedBasis",
+            "label.whyMetric", "label.whyMetricNoLimit", "label.whyLines",
+            "label.whyBus",
             "label.language",
             "lang.ko", "lang.en"
     };

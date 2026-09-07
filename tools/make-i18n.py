@@ -409,6 +409,15 @@ MESSAGES = [
     # duplication tile names its cohort and its size; without this the others said nothing, so
     # a crit badge had no line under it saying what it was crit against - and the one axis that
     # shows its working invites the assumption that the rest share it.
+    # Under a grade badge, saying which number decided it and which line it crossed. Without
+    # it the row read "유지보수성 · 경고 · 에러 처리": the axis named, and the reader left to
+    # scroll to the right tile, open its explanation and find the threshold - three steps to
+    # answer "why".
+    ("cq.label.whyMetric", "{0} {1}, over {2}", "{0} {1}, 기준 {2} 초과"),
+    ("cq.label.whyMetricNoLimit", "{0} {1}", "{0} {1}"),
+    ("cq.label.whyLines", "duplicated lines up by {0}", "중복 라인 {0}줄 증가"),
+    ("cq.label.whyBus", "bus factor {0}: one person wrote most of the code",
+     "bus factor {0} — 한 사람이 코드 대부분을 썼다"),
     ("cq.label.fixedBasis",
      "Graded at {0} and {1}: fixed thresholds, not measured from a cohort.",
      "{0} / {1} 기준으로 등급을 준다. 코호트 실측이 아니라 고정 임계값이다."),

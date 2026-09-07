@@ -59,7 +59,7 @@ public final class ReportBuilder
         Aggregates agg = aggregate(all, outcome, thresholds);
         report.put("legacy", legacyBlock(agg));
         report.put("kpis", kpis(agg, thresholds, all));
-        report.put("grades", grades(agg));
+        report.put("grades", grades(agg, thresholds));
         report.put("series", series(all));
         report.put("clones", clones(outcome.headClones));
         report.put("authors", authors(outcome));
@@ -661,7 +661,7 @@ public final class ReportBuilder
 
     // ------------------------------------------------------------------ grade summary
 
-    private static List<Map<String, Object>> grades(Aggregates a)
+    private static List<Map<String, Object>> grades(Aggregates a, Thresholds t)
     {
         List<Map<String, Object>> grades = new ArrayList<Map<String, Object>>();
 
@@ -684,25 +684,108 @@ public final class ReportBuilder
             duplication = directionState;
             axis = "direction";
         }
-        grades.add(grade("duplication", duplication, axis));
+        grades.add(grade("duplication", duplication, axis, reason(axis, duplication, a, t)));
 
-        grades.add(grade("maintainability", Thresholds.worst(a.stateErr, a.stateConn),
-                Thresholds.rank(a.stateErr) >= Thresholds.rank(a.stateConn)
-                        ? "errorSwallow" : "connectivity"));
+        String maintainability = Thresholds.worst(a.stateErr, a.stateConn);
+        String maintainAxis = Thresholds.rank(a.stateErr) >= Thresholds.rank(a.stateConn)
+                ? "errorSwallow" : "connectivity";
+        grades.add(grade("maintainability", maintainability, maintainAxis,
+                reason(maintainAxis, maintainability, a, t)));
 
         String bus = a.busFactor <= 1 ? Thresholds.CRIT
                 : (a.busFactor == 2 ? Thresholds.WARN : Thresholds.GOOD);
-        grades.add(grade("changeSafety", Thresholds.worst(a.stateChurn, bus),
-                Thresholds.rank(bus) >= Thresholds.rank(a.stateChurn) ? "busFactor" : "churn"));
+        String safety = Thresholds.worst(a.stateChurn, bus);
+        String safetyAxis = Thresholds.rank(bus) >= Thresholds.rank(a.stateChurn)
+                ? "busFactor" : "churn";
+        grades.add(grade("changeSafety", safety, safetyAxis, reason(safetyAxis, safety, a, t)));
         return grades;
     }
 
-    private static Map<String, Object> grade(String key, String state, String axis)
+    /**
+     * The number behind a grade, and the line it crossed.
+     *
+     * <p>A badge reading "act" with the axis named beside it still leaves the reader to scroll
+     * to the right tile, open its explanation and find the threshold - which is three steps to
+     * answer "why". The rule lives here, so the number it decided on belongs here too; the
+     * report only formats it.</p>
+     *
+     * <p>Empty for a good or unknown grade: there is nothing to explain about a verdict that is
+     * not asking for anything, and an unknown one has no number to show.</p>
+     */
+    private static Map<String, Object> reason(String axis, String state, Aggregates a,
+                                              Thresholds t)
+    {
+        Map<String, Object> why = new LinkedHashMap<String, Object>();
+        if (Thresholds.GOOD.equals(state) || Thresholds.UNKNOWN.equals(state))
+        {
+            return why;
+        }
+        boolean crit = Thresholds.CRIT.equals(state);
+        if ("busFactor".equals(axis))
+        {
+            why.put("kind", "bus");
+            why.put("busFactor", a.busFactor);
+            return why;
+        }
+        if ("direction".equals(axis))
+        {
+            why.put("kind", "lines");
+            why.put("delta", a.dupDeltaLines);
+            return why;
+        }
+        why.put("kind", "metric");
+        if ("errorSwallow".equals(axis))
+        {
+            metric(why, "errorSwallow", round(a.errDensity, 2), "perKloc",
+                    crit ? t.errDensityCrit : t.errDensityWarn);
+        }
+        else if ("connectivity".equals(axis))
+        {
+            metric(why, "connectivity", round(a.connDeltaPct, 1), "percent",
+                    crit ? t.connDeltaCrit : t.connDeltaWarn);
+        }
+        else if ("churn".equals(axis))
+        {
+            metric(why, "churn", round(a.churnPct, 1), "percent",
+                    crit ? t.churnCrit : t.churnWarn);
+        }
+        else if ("copyPaste".equals(axis))
+        {
+            metric(why, "copyPaste", round(a.copyPct, 1), "percent",
+                    crit ? t.copyPasteCrit : t.copyPasteWarn);
+        }
+        else if ("level".equals(axis))
+        {
+            Thresholds.LevelBand band = t.bandFor(a.dominantLanguage);
+            metric(why, "duplication", round(a.dupPct, 2), "percent",
+                    band == null ? null : (crit ? band.crit : band.warn));
+        }
+        return why;
+    }
+
+    private static void metric(Map<String, Object> why, String key, Object value, String unit,
+                               Double limit)
+    {
+        why.put("metric", key);
+        why.put("value", value);
+        why.put("unit", unit);
+        if (limit != null)
+        {
+            why.put("limit", limit);
+        }
+    }
+
+    private static Map<String, Object> grade(String key, String state, String axis,
+                                             Map<String, Object> reason)
     {
         Map<String, Object> grade = new LinkedHashMap<String, Object>();
         grade.put("key", key);
         grade.put("state", state);
         grade.put("axis", axis);
+        if (!reason.isEmpty())
+        {
+            grade.put("reason", reason);
+        }
         return grade;
     }
 
