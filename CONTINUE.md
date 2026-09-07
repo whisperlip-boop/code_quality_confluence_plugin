@@ -547,6 +547,29 @@ visible in is not listed on the screen: a dozen linked spaces was a dozen chips 
 for something the edit form shows in full. What is shown is the one state nothing else reveals -
 a registration with no space linked is administrators-only, and it says so.
 
+**The report now says why it graded something.** Found by pointing the plugin at its own
+repository. Two faults, both of the same kind - a verdict with nothing behind it. The three
+grade badges named the deciding axis and stopped, so answering "why is maintainability at act?"
+meant scrolling to the tiles, finding the right one, opening its explanation and reading the
+threshold; the builder now sends the number it decided on and the line it crossed, and the row
+reads `에러 은폐 밀도 3.18/KLOC, 기준 3.00/KLOC 초과`. And five of the six tiles graded against
+round numbers while saying nothing about it: only the duplication level is measured from a
+cohort, and it was the only one that showed its working, which invited the assumption that the
+rest shared it. Each of the five now carries its bands and declares them fixed. No verdict
+changed in either case.
+
+**Open question, asked and not answered.** Bus factor is 1 for any single-author repository, so
+change safety can never read anything but act there - it restates that the project is solo. The
+reason line now says so in words, which may be enough. The alternative, and the one consistent
+with the house style, is to decline to grade it the way the duplication level declines for a
+language with no cohort. Three options were put to the reporter; they were happy with the
+current state, so it stays.
+
+**Deriving the other five bands from a cohort is the real fix and is not done.** It needs the
+112 repositories re-cloned and `CohortProbe` extended to measure error density, copy-paste,
+churn and connectivity, not just duplication. Until then the report is honest about which
+numbers were measured, which is the most that can be said without doing the measuring.
+
 **Two things are still unverified and both are honest gaps.** The non-administrator permission
 path could not be exercised here: there is no such account on this instance, and both
 repositories have no spaces linked, which makes every non-administrator answer the same empty
