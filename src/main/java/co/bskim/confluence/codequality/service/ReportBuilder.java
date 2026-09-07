@@ -474,18 +474,36 @@ public final class ReportBuilder
     {
         List<Map<String, Object>> kpis = new ArrayList<Map<String, Object>>();
 
+        /*
+         * Every graded tile says what it was graded against.
+         *
+         * The duplication level is measured - a cohort of public repositories, named on the
+         * tile with its size - and it says so, including when a language has no cohort and it
+         * declines to grade at all. The other five bands are round numbers nobody measured,
+         * and they said nothing, so a "crit" badge appeared with no line under it to tell a
+         * reader what it was crit against. The asymmetry is what makes it misleading: the one
+         * axis that shows its working invites the assumption that the others share it. Found by
+         * pointing this plugin at its own repository, where an error-swallowing crit arrived
+         * with an empty detail block.
+         */
         kpis.add(kpi("copyPaste", round(a.copyPct, 1), "percent", a.stateCopy,
                 "lower", rollingCopy(all), null,
-                pair("lines", a.copied), pair("added", a.added)));
+                pair("lines", a.copied), pair("added", a.added),
+                pair("warn", t.copyPasteWarn), pair("crit", t.copyPasteCrit),
+                pair("basis", "fixed")));
 
         kpis.add(kpi("refactor", round(a.refactorPct, 1), "percent", a.stateRefactor,
                 "higher", rollingRefactor(all), null,
-                pair("moved", a.moved), pair("copied", a.copied)));
+                pair("moved", a.moved), pair("copied", a.copied),
+                pair("warn", t.refactorWarn), pair("crit", t.refactorCrit),
+                pair("basis", "fixed")));
 
         kpis.add(kpi("churn", round(a.churnPct, 1), "percent", a.stateChurn,
                 "lower", churnSpark(all), null,
                 pair("lines", a.churnLines), pair("added", a.churnAdded),
-                pair("censored", a.censoredCommits)));
+                pair("censored", a.censoredCommits),
+                pair("warn", t.churnWarn), pair("crit", t.churnCrit),
+                pair("basis", "fixed")));
 
         // The percentage is emitted only when it survives both guards the verdict already
         // applies: a baseline to divide by, and a change big enough not to be arithmetic on
@@ -512,12 +530,16 @@ public final class ReportBuilder
         kpis.add(dup);
 
         kpis.add(kpi("errorSwallow", round(a.errDensity, 2), "perKloc", a.stateErr,
-                "lower", sampledSpark(all, "errDensity"), null));
+                "lower", sampledSpark(all, "errDensity"), null,
+                pair("warn", t.errDensityWarn), pair("crit", t.errDensityCrit),
+                pair("basis", "fixed")));
 
         kpis.add(kpi("connectivity", round(a.connDensity, 1), "perKloc", a.stateConn,
                 "higher", sampledSpark(all, "connDensity"),
                 a.connDeltaKnown ? round(a.connDeltaPct, 1) : null,
                 pair("then", round(a.connThen, 1)), pair("windowDays", a.referenceDays),
+                pair("warn", t.connDeltaWarn), pair("crit", t.connDeltaCrit),
+                pair("basis", "fixed"),
                 pair("approximate", 1)));
 
         return kpis;

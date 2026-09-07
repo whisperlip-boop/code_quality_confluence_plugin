@@ -554,6 +554,15 @@
                 + ' ' + t('kpi.duplication.note');
         } else {
             foot = h('div', { 'class': 'kpi-foot' }, [statusBadge(kpi.state), why]);
+            // A grade with nothing under it saying what it was graded against is the shape the
+            // duplication tile already refuses to take. These bands are round numbers, so the
+            // note says so rather than letting the one measured axis speak for all of them.
+            var band = kpi.detail || {};
+            if (band.basis === 'fixed' && band.warn !== undefined
+                    && band.crit !== undefined) {
+                note.textContent = t('label.fixedBasis', [fmt(band.warn, 1), fmt(band.crit, 1)])
+                    + ' ' + note.textContent;
+            }
         }
 
         return h('div', { 'class': 'kpi' }, [

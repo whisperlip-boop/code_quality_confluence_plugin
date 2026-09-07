@@ -405,6 +405,13 @@ MESSAGES = [
      "Absolute count first, ratio second. The ratio hides growth whenever the codebase grows "
      "at the same rate as the duplication.",
      "절대량이 먼저, 비율은 보조. 코드가 중복과 같은 속도로 늘면 비율은 증가를 감춘다."),
+    # Under every tile whose bands are round numbers rather than a measured cohort. The
+    # duplication tile names its cohort and its size; without this the others said nothing, so
+    # a crit badge had no line under it saying what it was crit against - and the one axis that
+    # shows its working invites the assumption that the rest share it.
+    ("cq.label.fixedBasis",
+     "Graded at {0} and {1}: fixed thresholds, not measured from a cohort.",
+     "{0} / {1} 기준으로 등급을 준다. 코호트 실측이 아니라 고정 임계값이다."),
     ("cq.kpi.errorSwallow", "Error-swallowing density", "에러 은폐 밀도"),
     ("cq.kpi.errorSwallow.note",
      "Bare handlers, over-broad handlers, empty bodies and log-and-continue, per KLOC.",
