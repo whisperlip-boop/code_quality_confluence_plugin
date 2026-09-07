@@ -391,7 +391,7 @@ public class GitClient
      * exactly what makes an unauthenticated reachability probe useful to somebody mapping an
      * internal network.</p>
      */
-    private static String describe(String url, Exception e)
+    static String describe(String url, Exception e)
     {
         log.debug("Repository probe failed for {}", url, e);
         String text = (e.getMessage() == null ? "" : e.getMessage()).toLowerCase(Locale.ROOT);
@@ -399,7 +399,17 @@ public class GitClient
 
         if (text.contains("not authorized") || text.contains("authentication is required")
                 || text.contains("authentication failed") || text.contains("401")
-                || text.contains("403"))
+                || text.contains("403")
+                // "git-upload-pack not permitted on ..." - JGit's own wording for a 403 on the
+                // fetch service, which is what GitHub answers a token that is valid but has not
+                // been granted this repository: a fine-grained token whose repository list does
+                // not include it. Measured against a real one; none of the checks above see it,
+                // because JGit keeps neither the status code nor the remote's sentence, and the
+                // most informative failure there is was coming out as "unreachable" - which
+                // sends an administrator to look at the network while the cause is a checkbox
+                // on the token. "not granted" is the git command line's phrasing for the same
+                // refusal, kept in case JGit ever passes the remote's own words through.
+                || text.contains("not permitted") || text.contains("not granted"))
         {
             return "notAuthorized";
         }

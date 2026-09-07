@@ -149,9 +149,16 @@ MESSAGES = [
     ("cq.ui.probeNetwork", "Could not reach Confluence. Try again.",
      "Confluence에 연결하지 못했다. 다시 시도할 것."),
     # A category, not the remote's own text: that distinguished an open port from a closed one.
+    # Two different causes answer the same way, and only naming both gets anyone unstuck. A
+    # GitHub fine-grained token is rejected for this repository when its repository list does
+    # not include it - the token is perfectly valid, and "needs a valid token" then sends the
+    # reader off to make another one that will fail the same way. Its own prefix counts as part
+    # of it too: github_pat_... without the prefix is not a token at all.
     ("cq.ui.probeError.notAuthorized",
-     "Not authorized. A private repository needs a valid access token.",
-     "권한이 없다. 비공개 레포지터리에는 유효한 액세스 토큰이 필요하다."),
+     "Not authorized. A private repository needs an access token that includes its whole "
+     "prefix and has been granted access to this repository.",
+     "권한이 없다. 비공개 레포지터리에는 접두어까지 포함한 온전한 토큰이 필요하고, "
+     "그 토큰에 이 레포지터리 접근 권한이 부여돼 있어야 한다."),
     ("cq.ui.probeError.notFound",
      "No repository there. Check the URL, or the token if it is private.",
      "그 위치에 레포지터리가 없다. URL을 확인하거나, 비공개라면 토큰을 확인할 것."),
