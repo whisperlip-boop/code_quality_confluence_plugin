@@ -86,7 +86,11 @@
                  state="unrestricted"
                  icon="/download/resources/${atlassian.plugin.key}:code-quality-macro-icon/macro-icon.png">
         <description key="cq.macro.description"/>
-        <category name="development"/>
+        <!-- "admin", not "development": the repositories this macro renders can only be added
+             from the admin screen, so the macro browser's Administration group is where someone
+             who just set one up will look for it. Confluence labels this category
+             "Administration". -->
+        <category name="admin"/>
         <parameters>
             <!-- Required so the macro browser disables Save until something is chosen: an
                  empty selection shows nothing, and a macro that shows nothing is not worth
