@@ -65,6 +65,9 @@
         <url-pattern>/code-quality/report</url-pattern>
     </servlet>
 
+    <!-- Decorated with "atl.admin" from inside the servlet, so the administration
+         console's left-hand menu stays on screen the way it does on Confluence's own
+         configuration pages. -->
     <servlet key="code-quality-admin" name="Code Quality Repositories"
              class="co.bskim.confluence.codequality.servlet.AdminServlet">
         <url-pattern>/code-quality/admin</url-pattern>
@@ -75,7 +78,11 @@
     <web-item key="code-quality-admin-link" name="Code Quality Admin Link"
               section="system.admin/configuration" weight="200">
         <label key="cq.admin.section.label"/>
-        <link linkId="code-quality-admin-link-id">/plugins/servlet/code-quality/admin</link>
+        <!-- Same string as the web-item key, which is what the servlet names in its
+             "selectedWebItem" tag to have this entry highlighted; the key is what
+             Confluence compares against, and matching the two saves the next reader from
+             having to work out which of the two strings that is. -->
+        <link linkId="code-quality-admin-link">/plugins/servlet/code-quality/admin</link>
     </web-item>
 
     <!-- The icon is an attribute on the macro element, not a child <icon> element and not a

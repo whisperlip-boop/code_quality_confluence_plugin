@@ -58,7 +58,6 @@ MESSAGES = [
      "references them.",
      "등록한 레포지터리는 전역이다. 클론과 분석은 한 번만 돌고, 이를 참조하는 모든 페이지가 "
      "같은 결과를 본다."),
-    ("cq.admin.back", "Back to Confluence", "Confluence로 돌아가기"),
 
     # --- repository table UI --------------------------------------------------
     ("cq.ui.repositories", "Repositories", "레포지터리"),

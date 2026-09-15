@@ -636,6 +636,16 @@ than *stale*, and a fix that introduces a race to remove a delay is not an impro
 - Web resources are **minified** on the way out, so a local variable name will not be in the
   served file. Grep for a string literal instead - those survive.
 
+- **A servlet that prints a whole HTML document loses the administration console.** The left
+  menu comes from sitemesh's `atl.admin` decorator, which only wraps a response that asks for
+  it with `<meta name="decorator" content="atl.admin">` and only decorates a *fragment* - no
+  doctype, no `<html lang>`, and no heading of its own, since the decorator already draws
+  `<title>` as the page heading. Which menu entry lights up is a separate mechanism, and not
+  the Jira one: Confluence reads `<content tag="selectedWebItem">` from the body and compares
+  it to the **web-item key** (`decorators/admin.vmd` → `menuMacros_renderLeftNavMenu`), so
+  `admin.active.section` / `admin.active.tab` meta tags do nothing here. `ReportServlet` stays
+  undecorated on purpose - it is a full-bleed dashboard, not an admin screen.
+
 - **Active Objects from the analysis thread needs SAL's `TransactionTemplate`**, reads included,
   and entities must not be read outside it - hence `RepoSnapshot`. Both failures only appear
   after a real install.
